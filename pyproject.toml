@@ -57,11 +57,15 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
+    "pygments>=2.15.0",
+    "pylint>=3.0.0",
     "black>=23.0.0",
     "isort>=5.12.0",
     "mypy>=1.5.0",
     "ruff>=0.1.0",
     "pre-commit>=3.4.0",
+    "safety>=2.3.0",
+    "bandit>=1.7.0",
 ]
 docs = [
     "sphinx>=7.0.0",
