@@ -10,7 +10,11 @@ readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Digital Twins Lab", email = "contact@example.com"}
+    {name = "Antoni Dudij", email = "antonidudij@rwth-aachen.de"},
+    {name = "Maksim Feldmann", email = "maksim.feldman@rwth-aachen.de"}
+]
+maintainers = [
+    {name = "Antoni Dudij", email = "antonidudij@rwth-aachen.de"}
 ]
 keywords = [
     "digital-twins",

@@ -1,0 +1,27 @@
+# Code Owners for digital_twin_lab_project
+#
+# These owners will be automatically requested for review when someone 
+# opens a pull request that modifies code in their areas of responsibility.
+#
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global owners - own everything by default
+* @sheydHD
+
+# Documentation
+/docs/ @sheydHD
+*.md @sheydHD
+
+# Core application code
+/apps/ @sheydHD
+
+# Tests
+/tests/ @sheydHD
+
+# Configuration
+/configs/ @sheydHD
+pyproject.toml @sheydHD
+Makefile @sheydHD
+
+# CI/CD and GitHub workflows
+/.github/ @sheydHD

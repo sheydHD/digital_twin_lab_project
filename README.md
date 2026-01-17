@@ -374,6 +374,7 @@ For practical digital twin implementation:
 
 - **[Contributing Guide](CONTRIBUTING.md)**: How to contribute to the project
 - **[Code of Conduct](CODE_OF_CONDUCT.md)**: Community standards and expectations
+- **[Authors & Contributors](AUTHORS.md)**: Project developers and acknowledgments
 - **[Changelog](CHANGELOG.md)**: Version history and migration guides
 - **[Security Policy](SECURITY.md)**: Security guidelines and reporting
 - **[Documentation Index](docs/INDEX.md)**: Complete documentation navigation
@@ -413,7 +414,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ```
 MIT License
 
-Copyright (c) 2026 Digital Twins Lab
+Copyright (c) 2026 Antoni Dudij, Maksim Feldmann - RWTH Aachen University
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -431,13 +432,16 @@ furnished to do so, subject to the following conditions:
 
 - **PyMC Development Team** for the excellent probabilistic programming framework
 - **ArviZ Team** for MCMC diagnostics and visualization tools
-- **Digital Twins Lab** for project supervision and feedback
-- **Contributors** (see [CONTRIBUTORS.md](CONTRIBUTORS.md) when available)
+- **Digital Twins Lab at RWTH Aachen University** for project supervision and feedback
+- **Contributors** - See [AUTHORS.md](AUTHORS.md) for complete list
 
 ---
 
 ## 📧 Contact
 
+- **Maintainers**: 
+  - Antoni Dudij: antonidudij@rwth-aachen.de
+  - Maksim Feldmann: maksim.feldman@rwth-aachen.de
 - **Issues**: [GitHub Issue Tracker](https://github.com/sheydHD/digital_twin_lab_project/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/sheydHD/digital_twin_lab_project/discussions)
 - **Security**: See [Security Policy](SECURITY.md) for vulnerability reporting
@@ -458,6 +462,7 @@ furnished to do so, subject to the following conditions:
 
 **[⬆ Back to Top](#bayesian-model-selection-for-beam-theory-in-structural-health-monitoring-digital-twins)**
 
-Made with ❤️ by the Digital Twins Lab
+Developed with ❤️ by Antoni Dudij & Maksim Feldmann<br>
+*RWTH Aachen University - Digital Twins Lab*
 
 </div>
