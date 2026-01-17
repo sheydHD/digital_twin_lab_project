@@ -8,13 +8,13 @@ This project is developed and maintained by students at RWTH Aachen University a
 - **Email**: antonidudij@rwth-aachen.de
 - **Role**: Lead Developer & Maintainer
 - **Affiliation**: RWTH Aachen University, M.Sc. Computational Engineering Science (CES)
-- **Contributions**: Project architecture, Bayesian inference implementation, FEM solver, documentation
+- **Contributions**: Project architecture, FEM solver,  analysis pipeline, documentation
 
 ### Maksim Feldmann
 - **Email**: maksim.feldman@rwth-aachen.de
 - **Role**: Core Developer
 - **Affiliation**: RWTH Aachen University, M.Sc. Computational Engineering Science (CES)
-- **Contributions**: Model development, testing, analysis pipeline
+- **Contributions**: Model development, Bayesian inference implementation
 
 ---
 
