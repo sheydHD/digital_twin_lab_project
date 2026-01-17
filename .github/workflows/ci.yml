@@ -119,7 +119,8 @@ jobs:
     - name: Build documentation site
       run: |
         mkdir -p _site
-        cp README.md _site/index.md
+        cp README.md _site/
+        cp _config.yml _site/
         cp -r docs _site/
         cp LICENSE _site/
         cp CODE_OF_CONDUCT.md _site/
@@ -199,27 +200,27 @@ jobs:
 
             <h2>📚 Documentation</h2>
             <div class="docs-grid">
-                <a href="docs/GETTING_STARTED.md" class="doc-card">
+                <a href="docs/GETTING_STARTED.html" class="doc-card">
                     <div class="doc-title">🚀 Getting Started</div>
                     <div class="doc-desc">Installation, setup, and first run</div>
                 </a>
-                <a href="docs/EXPLANATION.md" class="doc-card">
+                <a href="docs/EXPLANATION.html" class="doc-card">
                     <div class="doc-title">📖 Explanation</div>
                     <div class="doc-desc">Plain-English project guide</div>
                 </a>
-                <a href="docs/ARCHITECTURE.md" class="doc-card">
+                <a href="docs/ARCHITECTURE.html" class="doc-card">
                     <div class="doc-title">🏗️ Architecture</div>
                     <div class="doc-desc">System design and patterns</div>
                 </a>
-                <a href="docs/API.md" class="doc-card">
+                <a href="docs/API.html" class="doc-card">
                     <div class="doc-title">🔧 API Reference</div>
                     <div class="doc-desc">Complete API documentation</div>
                 </a>
-                <a href="docs/DEVELOPMENT.md" class="doc-card">
+                <a href="docs/DEVELOPMENT.html" class="doc-card">
                     <div class="doc-title">💻 Development</div>
                     <div class="doc-desc">Dev setup and best practices</div>
                 </a>
-                <a href="docs/INDEX.md" class="doc-card">
+                <a href="docs/INDEX.html" class="doc-card">
                     <div class="doc-title">🗂️ Full Index</div>
                     <div class="doc-desc">Complete documentation index</div>
                 </a>
