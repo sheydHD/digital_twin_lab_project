@@ -1,0 +1,88 @@
+# Bayesian Model Selection for Beam Theory in Digital Twins
+# Default Configuration File
+
+# Beam geometry parameters
+beam_parameters:
+  length: 1.0  # Beam length [m]
+  width: 0.1   # Beam width [m]
+  # Aspect ratios (L/h) to study - ranging from thick to slender beams
+  aspect_ratios:
+    - 5    # Very thick beam - Timoshenko expected
+    - 8    # Thick beam
+    - 10   # Moderate
+    - 12   # Transition region expected
+    - 15   # Transition region
+    - 20   # Moderately slender
+    - 30   # Slender beam - EB expected
+    - 50   # Very slender beam
+
+# Material properties (Structural Steel)
+material:
+  elastic_modulus: 2.1e+11   # Young's modulus E [Pa] = 210 GPa
+  poisson_ratio: 0.3         # Poisson's ratio ν [-]
+  density: 7850              # Density ρ [kg/m³]
+  shear_correction_factor: 0.8333  # κ = 5/6 for rectangular section
+
+# Load configuration
+load:
+  point_load: 1000.0      # Point load at tip [N]
+  distributed_load: 0.0   # Distributed load [N/m]
+  moment: 0.0             # Applied moment at tip [N·m]
+
+# Synthetic data generation settings
+data_generation:
+  n_displacement_sensors: 5   # Number of displacement measurement points
+  n_strain_gauges: 4          # Number of strain gauge locations
+  displacement_noise: 1.0e-6  # Displacement noise std [m] (absolute)
+  strain_noise: 1.0e-6        # Strain noise std [-] (absolute)
+  relative_noise: true        # Use relative noise instead of absolute
+  noise_fraction: 0.005       # 0.5% relative noise level
+  seed: 42                    # Random seed for reproducibility
+
+# FEM settings for high-fidelity reference
+fem:
+  n_elements_x: 40   # Elements along beam length
+  n_elements_y: 8    # Elements through beam height
+  element_type: "Q4" # 4-node quadrilateral elements
+
+# Bayesian inference settings
+bayesian:
+  n_samples: 2000     # MCMC samples per chain
+  n_tune: 1000        # Tuning/warmup samples
+  n_chains: 4         # Number of parallel chains
+  target_accept: 0.9  # Target acceptance rate for NUTS
+  random_seed: 42     # Random seed for reproducibility
+
+# Prior distributions for calibration
+priors:
+  elastic_modulus:
+    distribution: lognormal
+    # Log-normal prior centered at 210 GPa with ~10% uncertainty
+    mu: 26.07  # ln(210e9) ≈ 26.07
+    sigma: 0.1
+  poisson_ratio:
+    distribution: uniform
+    lower: 0.2
+    upper: 0.4
+  observation_noise:
+    distribution: halfnormal
+    sigma: 1.0e-5
+
+# Model selection thresholds (following Kass & Raftery, 1995)
+model_selection:
+  # Bayes factor interpretation thresholds
+  weak_evidence: 3      # BF > 3: Weak evidence
+  moderate_evidence: 10 # BF > 10: Moderate evidence
+  strong_evidence: 100  # BF > 100: Strong evidence
+
+# Output settings
+output_dir: "outputs"
+save_traces: true
+save_figures: true
+figure_format: "png"
+figure_dpi: 150
+
+# Logging
+logging:
+  level: "INFO"
+  file: "outputs/logs/pipeline.log"

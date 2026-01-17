@@ -26,6 +26,26 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# Project outputs
+outputs/
+*.h5
+*.hdf5
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# PyMC / ArviZ traces
+*.netcdf
+*.nc
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
