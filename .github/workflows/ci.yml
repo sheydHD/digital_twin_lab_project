@@ -228,27 +228,27 @@ jobs:
 
             <h2>📋 Project Resources</h2>
             <div class="docs-grid">
-                <a href="CONTRIBUTING.md" class="doc-card">
+                <a href="CONTRIBUTING.html" class="doc-card">
                     <div class="doc-title">🤝 Contributing</div>
                     <div class="doc-desc">How to contribute</div>
                 </a>
-                <a href="CODE_OF_CONDUCT.md" class="doc-card">
+                <a href="CODE_OF_CONDUCT.html" class="doc-card">
                     <div class="doc-title">📜 Code of Conduct</div>
                     <div class="doc-desc">Community standards</div>
                 </a>
-                <a href="AUTHORS.md" class="doc-card">
+                <a href="AUTHORS.html" class="doc-card">
                     <div class="doc-title">👥 Authors</div>
                     <div class="doc-desc">Project developers</div>
                 </a>
-                <a href="CHANGELOG.md" class="doc-card">
+                <a href="CHANGELOG.html" class="doc-card">
                     <div class="doc-title">📰 Changelog</div>
                     <div class="doc-desc">Version history</div>
                 </a>
-                <a href="SECURITY.md" class="doc-card">
+                <a href="SECURITY.html" class="doc-card">
                     <div class="doc-title">🔐 Security</div>
                     <div class="doc-desc">Security policy</div>
                 </a>
-                <a href="LICENSE" class="doc-card">
+                <a href="LICENSE.html" class="doc-card">
                     <div class="doc-title">⚖️ License</div>
                     <div class="doc-desc">MIT License</div>
                 </a>
