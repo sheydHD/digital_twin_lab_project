@@ -1,7 +1,32 @@
 # Bayesian Model Selection for Beam Theory in Structural Health Monitoring Digital Twins
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![PyMC](https://img.shields.io/badge/PyMC-5.10+-red.svg)](https://www.pymc.io/)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/sheydHD/digital_twin_lab_project/graphs/commit-activity)
+
+> **Automated Bayesian model selection framework for comparing Euler-Bernoulli and Timoshenko beam theories using probabilistic inference and information criteria.**
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Key Results](#key-results)
+- [Project Goals](#project-goals)
+- [Quick Start](#quick-start)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Key Concepts](#key-concepts)
+- [Configuration](#configuration)
+- [Expected Results](#expected-results)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Contributing](#contributing)
+- [References](#references)
+- [License](#license)
+
+---
 
 ## Overview
 
@@ -35,6 +60,28 @@ The project successfully demonstrates **physics-aligned model selection**:
 - **Very slender beams (L/h = 50)**: Models become indistinguishable (both correct within noise level)
 
 The critical fix: Using **1D Timoshenko beam FEM** as ground truth ensures exact consistency between reference solution and beam theories, enabling proper model discrimination.
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# Clone and setup
+git clone https://github.com/sheydHD/digital_twin_lab_project.git
+cd digital_twin_lab_project
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Run full pipeline (~30-40 minutes)
+make run
+
+# View results
+cat outputs/reports/study_summary.txt
+```
+
+**That's it!** The pipeline will generate data, calibrate models, perform Bayesian model selection, and produce comprehensive reports.
+
+---
 
 ## Project Structure
 
@@ -217,6 +264,38 @@ Most core functionality has been implemented. Remaining enhancements:
 - [ ] Implement dynamic loading scenarios
 - [ ] Support additional boundary conditions
 
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+### Quick Contribution Workflow
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Make** your changes with tests
+4. **Ensure** all tests pass (`make test`)
+5. **Format** your code (`make format`)
+6. **Commit** with conventional commits (`feat: add new beam theory`)
+7. **Push** to your fork
+8. **Open** a Pull Request
+
+### Development Commands
+
+```bash
+make install       # Install with dev dependencies
+make test          # Run all tests
+make test-cov      # Run tests with coverage
+make format        # Auto-format code (black, isort)
+make lint          # Check code quality (pylint)
+make clean         # Clean outputs and cache files
+```
+
+See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development guide.
+
+---
+
 ## Configuration
 
 Edit `configs/default_config.yaml` to customize:
@@ -276,33 +355,102 @@ For practical digital twin implementation:
 3. Recalibrate model selection when geometry or loading changes
 4. For high-frequency analysis (f > f₁), prefer Timoshenko regardless of aspect ratio
 
+---
+
+## 📚 Documentation
+
+### Core Documentation
+
+- **[README.md](README.md)** (this file): Overview and quick start
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: System design, patterns, and trade-offs
+- **[API.md](docs/API.md)**: Complete API reference with examples
+- **[CONTRIBUTING.md](CONTRIBUTING.md)**: Development guidelines and workflow
+- **[DEVELOPMENT.md](docs/DEVELOPMENT.md)**: Development setup and best practices
+- **[EXPLANATION.md](EXPLANATION.md)**: Plain-English project explanation
+
+### Additional Resources
+
+- **[CHANGELOG.md](CHANGELOG.md)**: Version history and migration guides
+- **[LICENSE](LICENSE)**: MIT License
+- **[SECURITY.md](SECURITY.md)**: Security policy and reporting
+
+### Quick Links
+
+- 🎯 [**Getting Started Guide**](#quick-start)
+- 🏗️ [**Architecture Overview**](ARCHITECTURE.md#high-level-architecture)
+- 🔧 [**API Reference**](docs/API.md)
+- 🤝 [**Contributing Guidelines**](CONTRIBUTING.md)
+- 🐛 [**Issue Tracker**](https://github.com/sheydHD/digital_twin_lab_project/issues)
+
+---
+
+## 💻 Development
+
 ## References
 
-1. **Euler vs Timoshenko comparison**: [J. Sound Vib. 2020](https://doi.org/10.1016/j.jsv.2020.115432)
-2. **Bayesian Data Analysis**: Gelman et al., 3rd edition
-3. **Bayes Factors**: Kass & Raftery (1995), JASA
-4. **PyMC Documentation**: https://www.pymc.io/
+1. **Timoshenko Beam Theory**: Timoshenko, S.P. (1921). "On the correction for shear of the differential equation for transverse vibrations of prismatic bars." *Philosophical Magazine*, 41(245), 744-746.
 
-## Development
+2. **Bayesian Model Selection**: Kass, R.E., & Raftery, A.E. (1995). "Bayes factors." *Journal of the American Statistical Association*, 90(430), 773-795.
 
-### Running Tests
+3. **WAIC**: Watanabe, S. (2010). "Asymptotic equivalence of Bayes cross validation and widely applicable information criterion in singular learning theory." *Journal of Machine Learning Research*, 11, 3571-3594.
 
-```bash
-make test          # Run all tests
-make test-cov      # Run with coverage report
+4. **PyMC**: Salvatier, J., Wiecki, T.V., & Fonnesbeck, C. (2016). "Probabilistic programming in Python using PyMC3." *PeerJ Computer Science*, 2, e55.
+
+5. **Digital Twins for SHM**: Worden, K., & Cross, E.J. (2018). "On switching response surface models, with applications to the structural health monitoring of bridges." *Mechanical Systems and Signal Processing*, 98, 139-156.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+```
+MIT License
+
+Copyright (c) 2026 Digital Twins Lab
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+[Full license text in LICENSE file]
 ```
 
-### Code Quality
+---
 
-```bash
-make lint          # Check code style
-make format        # Format code
-```
+## 🙏 Acknowledgments
 
-## License
+- **PyMC Development Team** for the excellent probabilistic programming framework
+- **ArviZ Team** for MCMC diagnostics and visualization tools
+- **Digital Twins Lab** for project supervision and feedback
+- **Contributors** (see [CONTRIBUTORS.md](CONTRIBUTORS.md) when available)
 
-MIT License - see LICENSE file for details.
+---
 
-## Author
+## 📧 Contact
 
-Digital Twins Lab - WS2025/2026
+- **Issues**: [GitHub Issue Tracker](https://github.com/sheydHD/digital_twin_lab_project/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/sheydHD/digital_twin_lab_project/discussions)
+- **Security**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
+
+---
+
+## 📊 Project Stats
+
+![GitHub last commit](https://img.shields.io/github/last-commit/sheydHD/digital_twin_lab_project)
+![GitHub issues](https://img.shields.io/github/issues/sheydHD/digital_twin_lab_project)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/sheydHD/digital_twin_lab_project)
+![Lines of code](https://img.shields.io/tokei/lines/github/sheydHD/digital_twin_lab_project)
+
+---
+
+<div align="center">
+
+**[⬆ Back to Top](#bayesian-model-selection-for-beam-theory-in-structural-health-monitoring-digital-twins)**
+
+Made with ❤️ by the Digital Twins Lab
+
+</div>
