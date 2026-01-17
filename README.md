@@ -270,6 +270,8 @@ Most core functionality has been implemented. Remaining enhancements:
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
+**Code of Conduct**: This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+
 ### Quick Contribution Workflow
 
 1. **Fork** the repository
@@ -292,7 +294,7 @@ make lint          # Check code quality (pylint)
 make clean         # Clean outputs and cache files
 ```
 
-See **[Development Guide](docs/DEVELOPMENT.md)** for detailed development workflow and **[Contributing Guide](docs/CONTRIBUTING.md)** for contribution guidelines.
+See **[Development Guide](docs/DEVELOPMENT.md)** for detailed development workflow and **[Contributing Guide](CONTRIBUTING.md)** for contribution guidelines.
 
 ---
 
@@ -370,9 +372,10 @@ For practical digital twin implementation:
 
 ### Additional Resources
 
-- **[Contributing Guide](docs/CONTRIBUTING.md)**: How to contribute to the project
-- **[Changelog](docs/CHANGELOG.md)**: Version history and migration guides
-- **[Security Policy](docs/SECURITY.md)**: Security guidelines and reporting
+- **[Contributing Guide](CONTRIBUTING.md)**: How to contribute to the project
+- **[Code of Conduct](CODE_OF_CONDUCT.md)**: Community standards and expectations
+- **[Changelog](CHANGELOG.md)**: Version history and migration guides
+- **[Security Policy](SECURITY.md)**: Security guidelines and reporting
 - **[Documentation Index](docs/INDEX.md)**: Complete documentation navigation
 - **[LICENSE](LICENSE)**: MIT License
 
@@ -381,7 +384,7 @@ For practical digital twin implementation:
 - 🎯 [**Getting Started**](docs/GETTING_STARTED.md)
 - 🏗️ [**Architecture Overview**](docs/ARCHITECTURE.md#high-level-architecture)
 - 🔧 [**API Reference**](docs/API.md)
-- 🤝 [**Contributing**](docs/CONTRIBUTING.md)
+- 🤝 [**Contributing**](CONTRIBUTING.md)
 - 📚 [**Full Documentation**](docs/)
 - 🐛 [**Issue Tracker**](https://github.com/sheydHD/digital_twin_lab_project/issues)
 
@@ -437,7 +440,7 @@ furnished to do so, subject to the following conditions:
 
 - **Issues**: [GitHub Issue Tracker](https://github.com/sheydHD/digital_twin_lab_project/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/sheydHD/digital_twin_lab_project/discussions)
-- **Security**: See [Security Policy](docs/SECURITY.md) for vulnerability reporting
+- **Security**: See [Security Policy](SECURITY.md) for vulnerability reporting
 - **Documentation**: Browse [Complete Documentation](docs/)
 
 ---

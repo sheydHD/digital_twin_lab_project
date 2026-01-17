@@ -26,9 +26,10 @@ This directory contains all technical documentation for the project, organized f
 | **[Architecture](ARCHITECTURE.md)** | System design and components | Developers |
 | **[API Reference](API.md)** | Complete API documentation | Developers |
 | **[Development Guide](DEVELOPMENT.md)** | Development workflow | Contributors |
-| **[Contributing](CONTRIBUTING.md)** | How to contribute | Contributors |
-| **[Changelog](CHANGELOG.md)** | Version history | Everyone |
-| **[Security Policy](SECURITY.md)** | Security guidelines | Maintainers |
+| **[Contributing](../CONTRIBUTING.md)** | How to contribute | Contributors |
+| **[Code of Conduct](../CODE_OF_CONDUCT.md)** | Community standards | Everyone |
+| **[Changelog](../CHANGELOG.md)** | Version history | Everyone |
+| **[Security Policy](../SECURITY.md)** | Security guidelines | Maintainers |
 
 ---
 
@@ -82,16 +83,16 @@ This directory contains all technical documentation for the project, organized f
 - 🛠️ **[Development Setup](DEVELOPMENT.md)** - Dev environment
 - 🧪 **[Testing Guide](DEVELOPMENT.md#testing)** - How to test
 - 🐛 **[Debugging](DEVELOPMENT.md#debugging-guide)** - Troubleshooting
-- 🤝 **[Contributing](CONTRIBUTING.md)** - Contribution workflow
-- 📋 **[Code Standards](CONTRIBUTING.md#coding-standards)** - Style guide
+- 🤝 **[Contributing](../CONTRIBUTING.md)** - Contribution workflow
+- 📋 **[Code Standards](../CONTRIBUTING.md#coding-standards)** - Style guide
 
 </details>
 
 <details>
 <summary><b>Stay Updated</b></summary>
 
-- 📰 **[Changelog](CHANGELOG.md)** - What's new
-- 🔐 **[Security](SECURITY.md)** - Security policy
+- 📰 **[Changelog](../CHANGELOG.md)** - What's new
+- 🔐 **[Security](../SECURITY.md)** - Security policy
 - 🗺️ **[Roadmap](#roadmap)** - Future plans
 
 </details>
@@ -176,7 +177,7 @@ docs/
 - Write your first test
 
 **Level 4: Contributing**
-- Read [CONTRIBUTING.md](CONTRIBUTING.md)
+- Read [CONTRIBUTING.md](../CONTRIBUTING.md)
 - Pick an issue
 - Submit your first PR
 
@@ -233,7 +234,7 @@ Documentation improvements are always welcome!
 
 ### Major Changes
 1. Open an issue first to discuss
-2. Follow the [documentation style guide](CONTRIBUTING.md#documentation)
+2. Follow the [documentation style guide](../CONTRIBUTING.md#documentation)
 3. Update related documents
 4. Test all links
 5. Submit PR
@@ -244,7 +245,7 @@ Documentation improvements are always welcome!
 
 - **Questions**: [GitHub Discussions](https://github.com/sheydHD/digital_twin_lab_project/discussions)
 - **Bug Reports**: [GitHub Issues](https://github.com/sheydHD/digital_twin_lab_project/issues)
-- **Security**: See [SECURITY.md](SECURITY.md)
+- **Security**: See [SECURITY.md](../SECURITY.md)
 
 ---
 

@@ -385,7 +385,7 @@ Now that you have the pipeline running:
 2. **Understand the code**: See [ARCHITECTURE.md](ARCHITECTURE.md)
 3. **Modify parameters**: Edit `configs/default_config.yaml`
 4. **Learn the API**: Read [API.md](API.md)
-5. **Contribute**: See [CONTRIBUTING.md](CONTRIBUTING.md)
+5. **Contribute**: See [CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## Getting Help
 
