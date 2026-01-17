@@ -292,7 +292,7 @@ make lint          # Check code quality (pylint)
 make clean         # Clean outputs and cache files
 ```
 
-See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed development guide.
+See **[Development Guide](docs/DEVELOPMENT.md)** for detailed development workflow and **[Contributing Guide](docs/CONTRIBUTING.md)** for contribution guidelines.
 
 ---
 
@@ -362,24 +362,27 @@ For practical digital twin implementation:
 ### Core Documentation
 
 - **[README.md](README.md)** (this file): Overview and quick start
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: System design, patterns, and trade-offs
-- **[API.md](docs/API.md)**: Complete API reference with examples
-- **[CONTRIBUTING.md](CONTRIBUTING.md)**: Development guidelines and workflow
-- **[DEVELOPMENT.md](docs/DEVELOPMENT.md)**: Development setup and best practices
-- **[EXPLANATION.md](EXPLANATION.md)**: Plain-English project explanation
+- **[Getting Started](docs/GETTING_STARTED.md)**: Installation and first run guide
+- **[Architecture](docs/ARCHITECTURE.md)**: System design, patterns, and trade-offs
+- **[API Reference](docs/API.md)**: Complete API documentation with examples
+- **[Development Guide](docs/DEVELOPMENT.md)**: Development setup and best practices
+- **[Plain-English Explanation](docs/EXPLANATION.md)**: Project guide for non-experts
 
 ### Additional Resources
 
-- **[CHANGELOG.md](CHANGELOG.md)**: Version history and migration guides
+- **[Contributing Guide](docs/CONTRIBUTING.md)**: How to contribute to the project
+- **[Changelog](docs/CHANGELOG.md)**: Version history and migration guides
+- **[Security Policy](docs/SECURITY.md)**: Security guidelines and reporting
+- **[Documentation Index](docs/INDEX.md)**: Complete documentation navigation
 - **[LICENSE](LICENSE)**: MIT License
-- **[SECURITY.md](SECURITY.md)**: Security policy and reporting
 
 ### Quick Links
 
-- 🎯 [**Getting Started Guide**](#quick-start)
-- 🏗️ [**Architecture Overview**](ARCHITECTURE.md#high-level-architecture)
+- 🎯 [**Getting Started**](docs/GETTING_STARTED.md)
+- 🏗️ [**Architecture Overview**](docs/ARCHITECTURE.md#high-level-architecture)
 - 🔧 [**API Reference**](docs/API.md)
-- 🤝 [**Contributing Guidelines**](CONTRIBUTING.md)
+- 🤝 [**Contributing**](docs/CONTRIBUTING.md)
+- 📚 [**Full Documentation**](docs/)
 - 🐛 [**Issue Tracker**](https://github.com/sheydHD/digital_twin_lab_project/issues)
 
 ---
@@ -434,7 +437,8 @@ furnished to do so, subject to the following conditions:
 
 - **Issues**: [GitHub Issue Tracker](https://github.com/sheydHD/digital_twin_lab_project/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/sheydHD/digital_twin_lab_project/discussions)
-- **Security**: See [SECURITY.md](SECURITY.md) for vulnerability reporting
+- **Security**: See [Security Policy](docs/SECURITY.md) for vulnerability reporting
+- **Documentation**: Browse [Complete Documentation](docs/)
 
 ---
 
