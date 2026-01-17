@@ -68,11 +68,77 @@ class TestCantileverFEM:
 
         eigenvalues = np.linalg.eigvalsh(Ke)
         # Should be non-negative (allowing for numerical tolerance)
-        assert np.all(eigenvalues >= -1e-10)
+        # Single element has 3 rigid body modes with near-zero eigenvalues
+        assert np.all(eigenvalues >= -1e-5)
 
-    # TODO: Task T6 - Add FEM solution validation tests
-    # TODO: Task T7 - Add mesh convergence tests
-    # TODO: Task T8 - Add strain extraction tests
+    def test_fem_solution_tip_deflection(self, setup_fem):
+        """Test FEM solution against analytical tip deflection (Task T6)."""
+        fem = setup_fem
+        P = 1000  # Point load at tip
+
+        # Solve FEM problem
+        result = fem.solve(point_load=P)
+
+        # Get analytical Timoshenko solution for comparison
+        from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
+        from apps.models.timoshenko import TimoshenkoBeam
+
+        geometry = BeamGeometry(length=fem.length, height=fem.height, width=fem.thickness)
+        material = MaterialProperties(
+            elastic_modulus=fem.E,
+            poisson_ratio=fem.nu,
+        )
+        timo = TimoshenkoBeam(geometry, material)
+        load = LoadCase(point_load=P)
+        w_analytical = timo.tip_deflection(load)
+
+        # FEM should be within 25% of analytical (2D plane stress differs from 1D beam theory)
+        # Compare magnitudes since both should be negative (downward)
+        assert np.isclose(abs(result.tip_deflection), abs(w_analytical), rtol=0.25)
+
+    def test_mesh_convergence(self):
+        """Test that solution converges with mesh refinement (Task T7)."""
+        P = 1000
+        tip_deflections = []
+
+        for n_elem_x in [10, 20, 40]:
+            fem = CantileverFEM(
+                length=1.0,
+                height=0.1,
+                thickness=0.05,
+                elastic_modulus=210e9,
+                poisson_ratio=0.3,
+                n_elements_x=n_elem_x,
+                n_elements_y=4,
+            )
+            result = fem.solve(point_load=P)
+            tip_deflections.append(result.tip_deflection)
+
+        # Differences should decrease with refinement
+        diff1 = abs(tip_deflections[1] - tip_deflections[0])
+        diff2 = abs(tip_deflections[2] - tip_deflections[1])
+        assert diff2 < diff1
+
+    def test_strain_extraction(self, setup_fem):
+        """Test strain extraction at sensor locations (Task T8)."""
+        fem = setup_fem
+        P = 1000
+        result = fem.solve(point_load=P)
+
+        # Check that strains were computed
+        assert result.strains is not None
+        assert len(result.strains) == fem.mesh.n_elements
+
+        # Extract surface strains
+        x_data, strain_data = fem.extract_surface_strain(result.strains, "top")
+
+        # Should have some data points
+        assert len(x_data) > 0
+
+        # For cantilever with downward tip load:
+        # - Top surface is in tension (positive strain)
+        # - Bottom surface would be in compression (negative strain)
+        assert np.mean(strain_data) > 0
 
 
 class TestShapeFunctions:

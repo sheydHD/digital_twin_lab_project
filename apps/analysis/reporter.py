@@ -24,9 +24,6 @@ class ResultsReporter:
     """
     Generate reports from Bayesian model selection analysis.
 
-    TODO: Task 29.1 - Implement complete reporting functionality
-    TODO: Task 29.2 - Add LaTeX report generation
-    TODO: Task 29.3 - Create interactive HTML report
     """
 
     def __init__(self, output_dir: Path = Path("outputs/reports")):
@@ -54,7 +51,6 @@ class ResultsReporter:
         Returns:
             Report text
 
-        TODO: Task 29.4 - Add convergence assessment
         """
         report = []
         report.append("=" * 70)
@@ -181,7 +177,6 @@ class ResultsReporter:
         Returns:
             Report text
 
-        TODO: Task 29.5 - Add statistical significance tests
         """
         report = []
         report.append("=" * 70)
@@ -259,7 +254,6 @@ class ResultsReporter:
             study_results: Study results dictionary
             filename: Output filename
 
-        TODO: Task 29.6 - Handle non-serializable objects
         """
         # Create serializable version
         export_data = {

@@ -185,6 +185,12 @@
   },
   "active": "a5f3ea1e44cf441b",
   "lastOpenFiles": [
+    "pytest-cache-files-nkta9tkd",
+    "tests/__pycache__/test_fem.cpython-312-pytest-9.0.2.pyc",
+    "tests/__pycache__/test_beam_models.cpython-312-pytest-9.0.2.pyc",
+    "tests/__pycache__/__init__.cpython-312.pyc",
+    "tests/__pycache__",
+    "apps/data/sediUDpiT",
     "EXPLANATION.md"
   ]
 }

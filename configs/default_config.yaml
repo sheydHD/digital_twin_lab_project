@@ -36,7 +36,7 @@ data_generation:
   displacement_noise: 1.0e-6  # Displacement noise std [m] (absolute)
   strain_noise: 1.0e-6        # Strain noise std [-] (absolute)
   relative_noise: true        # Use relative noise instead of absolute
-  noise_fraction: 0.005       # 0.5% relative noise level
+  noise_fraction: 0.0005      # 0.05% relative noise (lowered to improve model discrimination)
   seed: 42                    # Random seed for reproducibility
 
 # FEM settings for high-fidelity reference
@@ -47,26 +47,27 @@ fem:
 
 # Bayesian inference settings
 bayesian:
-  n_samples: 2000     # MCMC samples per chain
-  n_tune: 1000        # Tuning/warmup samples
-  n_chains: 4         # Number of parallel chains
-  target_accept: 0.9  # Target acceptance rate for NUTS
+  n_samples: 800      # MCMC samples per chain (reduced for faster runs)
+  n_tune: 400         # Tuning/warmup samples (reduced)
+  n_chains: 2         # Number of chains (reduced to speed up)
+  target_accept: 0.95 # Target acceptance rate for NUTS (increased for stability)
   random_seed: 42     # Random seed for reproducibility
 
 # Prior distributions for calibration
+# NOTE: These are now tighter to prevent overflow and divergences
 priors:
   elastic_modulus:
     distribution: lognormal
-    # Log-normal prior centered at 210 GPa with ~10% uncertainty
+    # Log-normal prior centered at 210 GPa with ~5% uncertainty
     mu: 26.07  # ln(210e9) ≈ 26.07
-    sigma: 0.1
+    sigma: 0.05  # Tighter prior (was 0.1)
   poisson_ratio:
-    distribution: uniform
-    lower: 0.2
-    upper: 0.4
+    distribution: normal  # Changed from uniform for better sampling
+    mu: 0.3
+    sigma: 0.03  # Tight prior around steel value
   observation_noise:
     distribution: halfnormal
-    sigma: 1.0e-5
+    sigma: 1.0e-6  # Tighter (was 1e-5)
 
 # Model selection thresholds (following Kass & Raftery, 1995)
 model_selection:

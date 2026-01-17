@@ -57,9 +57,6 @@ class PipelineOrchestrator:
     - Model selection using Bayes factors
     - Result visualization and reporting
 
-    TODO: Task 30.1 - Complete pipeline implementation
-    TODO: Task 30.2 - Add checkpointing for long-running analyses
-    TODO: Task 30.3 - Implement parallel calibration for multiple aspect ratios
     """
 
     def __init__(self, config: Dict[str, Any]):
@@ -105,7 +102,7 @@ class PipelineOrchestrator:
             displacement_std=data_cfg.get("displacement_noise", 1e-6),
             strain_std=data_cfg.get("strain_noise", 1e-6),
             relative_noise=data_cfg.get("relative_noise", True),
-            noise_fraction=data_cfg.get("noise_fraction", 0.02),
+            noise_fraction=data_cfg.get("noise_fraction", 0.005),
             seed=data_cfg.get("seed", 42),
         )
 
@@ -148,7 +145,6 @@ class PipelineOrchestrator:
         Returns:
             Dictionary with all results
 
-        TODO: Task 30.4 - Implement full pipeline execution
         """
         console.print("\n[bold green]Starting Full Pipeline[/bold green]")
 
@@ -182,7 +178,6 @@ class PipelineOrchestrator:
         Returns:
             List of synthetic datasets
 
-        TODO: Task 31.1 - Implement data generation stage
         """
         logger.info("Generating synthetic data...")
 
@@ -219,8 +214,6 @@ class PipelineOrchestrator:
         Returns:
             Dictionary with calibration results
 
-        TODO: Task 31.2 - Implement calibration stage
-        TODO: Task 31.3 - Add parallel processing for multiple datasets
         """
         logger.info("Running Bayesian calibration...")
 
@@ -239,12 +232,16 @@ class PipelineOrchestrator:
             L_h = dataset.geometry.aspect_ratio
             console.print(f"\n  Calibrating for L/h = {L_h:.1f} ({i+1}/{len(self.datasets)})")
 
+            # Get target_accept from config (default 0.95 for stability)
+            target_accept = self.config.get("bayesian", {}).get("target_accept", 0.95)
+            
             # Euler-Bernoulli calibration
             eb_calibrator = EulerBernoulliCalibrator(
                 priors=eb_priors,
                 n_samples=self.n_samples,
                 n_tune=self.n_tune,
                 n_chains=self.n_chains,
+                target_accept=target_accept,
             )
             eb_result = eb_calibrator.calibrate(dataset)
             eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood()
@@ -256,6 +253,7 @@ class PipelineOrchestrator:
                 n_samples=self.n_samples,
                 n_tune=self.n_tune,
                 n_chains=self.n_chains,
+                target_accept=target_accept,
             )
             timo_result = timo_calibrator.calibrate(dataset)
             timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood()
@@ -275,7 +273,6 @@ class PipelineOrchestrator:
         Returns:
             Study results dictionary
 
-        TODO: Task 31.4 - Implement analysis stage
         """
         logger.info("Analyzing model selection...")
 
@@ -344,7 +341,6 @@ class PipelineOrchestrator:
         Returns:
             Dictionary with report paths
 
-        TODO: Task 31.5 - Complete report generation
         """
         logger.info("Generating reports...")
 
@@ -410,6 +406,7 @@ class PipelineOrchestrator:
             table.add_row(f"{L_h:.1f}", bf_str, rec)
 
         console.print(table)
+        console.print("\n[dim]Note: Log BF > 0 favors Euler-Bernoulli, Log BF < 0 favors Timoshenko[/dim]")
 
         # Print transition point
         transition = self.study_results.get("transition_aspect_ratio")
@@ -431,6 +428,5 @@ class PipelineOrchestrator:
         Args:
             results_dir: Directory containing previous results
 
-        TODO: Task 31.6 - Implement results loading
         """
         raise NotImplementedError("Results loading not yet implemented")

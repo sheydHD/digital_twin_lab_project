@@ -15,10 +15,11 @@ be compared against analytical beam theory predictions.
 """
 
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Tuple, List
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
+from scipy.interpolate import interp1d
 
 
 @dataclass
@@ -39,6 +40,72 @@ class FEMMesh:
     n_nodes: int
     n_elements: int
     element_type: str = "Q4"  # 4-node quadrilateral
+
+
+@dataclass
+class FEMResult:
+    """
+    Result container for FEM analysis.
+
+    Attributes:
+        displacements: Nodal displacements (n_nodes, 2)
+        strains: Element strains (n_elements, 3) - [eps_xx, eps_yy, gamma_xy]
+        stresses: Element stresses (n_elements, 3) - [sigma_xx, sigma_yy, tau_xy]
+        mesh: Reference to mesh
+        fem: Reference to FEM model
+    """
+
+    displacements: np.ndarray
+    strains: np.ndarray
+    stresses: np.ndarray
+    mesh: FEMMesh
+    fem: "CantileverFEM"
+
+    @property
+    def tip_deflection(self) -> float:
+        """Get maximum deflection at beam tip."""
+        # Find nodes at tip (x = length)
+        tip_mask = np.abs(self.mesh.nodes[:, 0] - self.fem.length) < 1e-10
+        tip_deflections = self.displacements[tip_mask, 1]
+        # Return centerline deflection (average or center node)
+        return np.mean(tip_deflections)
+
+    def get_centerline_deflection(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Get deflection along beam centerline."""
+        return self.fem.extract_centerline_deflection(self.displacements)
+
+    def get_strain_at_points(
+        self,
+        x_points: np.ndarray,
+        y_coord: float,
+    ) -> np.ndarray:
+        """
+        Interpolate axial strain at specified points.
+
+        Args:
+            x_points: x-coordinates for strain extraction
+            y_coord: y-coordinate (distance from neutral axis)
+
+        Returns:
+            Interpolated axial strains at requested points
+        """
+        # Determine if top or bottom surface
+        surface = "top" if y_coord > 0 else "bottom"
+
+        # Extract surface strains
+        x_data, strain_data = self.fem.extract_surface_strain(self.strains, surface)
+
+        if len(x_data) < 2:
+            return np.zeros_like(x_points)
+
+        # Interpolate to requested points
+        interp_func = interp1d(
+            x_data, strain_data,
+            kind='linear',
+            bounds_error=False,
+            fill_value=(strain_data[0], strain_data[-1])
+        )
+        return interp_func(x_points)
 
 
 @dataclass
@@ -66,11 +133,6 @@ class CantileverFEM:
     This class generates high-fidelity synthetic data by solving the full
     2D elasticity problem, capturing effects that simplified beam theories
     cannot represent exactly.
-
-    TODO: Task 10.1 - Implement complete FEM solver
-    TODO: Task 10.2 - Add mesh refinement study
-    TODO: Task 10.3 - Validate against analytical solutions
-    TODO: Task 10.4 - Implement strain extraction at sensor locations
     """
 
     def __init__(
@@ -119,8 +181,6 @@ class CantileverFEM:
         Returns:
             FEMMesh object with nodes and connectivity
 
-        TODO: Task 10.5 - Implement mesh generation
-        TODO: Task 10.6 - Add mesh quality checks
         """
         # Node generation
         n_nodes_x = self.n_elem_x + 1
@@ -170,7 +230,6 @@ class CantileverFEM:
         Returns:
             3x3 constitutive matrix
 
-        TODO: Task 10.7 - Implement plane stress matrix
         """
         E = self.E
         nu = self.nu
@@ -196,7 +255,6 @@ class CantileverFEM:
             N: Shape functions (4,)
             dN: Shape function derivatives (4, 2)
 
-        TODO: Task 10.8 - Implement Q4 shape functions
         """
         # Shape functions
         N = 0.25 * np.array([
@@ -226,8 +284,6 @@ class CantileverFEM:
         Returns:
             8x8 element stiffness matrix (2 DOF per node, 4 nodes)
 
-        TODO: Task 10.9 - Implement element stiffness matrix
-        TODO: Task 10.10 - Use Gaussian quadrature (2x2)
         """
         # Get element nodes
         elem_nodes = self.mesh.elements[elem_id]
@@ -240,7 +296,6 @@ class CantileverFEM:
         # Initialize element stiffness
         Ke = np.zeros((8, 8))
 
-        # TODO: Task 10.11 - Complete numerical integration loop
         for i, xi in enumerate(gauss_pts):
             for j, eta in enumerate(gauss_pts):
                 # Get shape functions and derivatives
@@ -276,7 +331,6 @@ class CantileverFEM:
         Returns:
             Sparse global stiffness matrix
 
-        TODO: Task 10.12 - Implement global assembly
         """
         n_dof = 2 * self.mesh.n_nodes
 
@@ -306,7 +360,7 @@ class CantileverFEM:
 
     def setup_cantilever_bc(
         self,
-        tip_load: float = 0.0,
+        point_load: float = 0.0,
         distributed_load: float = 0.0,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -315,14 +369,12 @@ class CantileverFEM:
         Fixed end at x=0, load applied at x=L.
 
         Args:
-            tip_load: Point load at tip [N]
+            point_load: Point load at tip [N]
             distributed_load: Uniformly distributed load [N/m]
 
         Returns:
             fixed_dofs: Array of constrained DOFs
             force_vector: Global force vector
-
-        TODO: Task 10.13 - Implement boundary conditions
         """
         n_dof = 2 * self.mesh.n_nodes
 
@@ -339,50 +391,57 @@ class CantileverFEM:
         F = np.zeros(n_dof)
 
         # Apply tip load (distributed across tip nodes)
-        if tip_load != 0:
+        if point_load != 0:
             tip_nodes = np.where(
                 np.abs(self.mesh.nodes[:, 0] - self.length) < 1e-10
             )[0]
 
             # Distribute load across tip nodes (linear distribution for uniform stress)
-            load_per_node = tip_load / len(tip_nodes)
+            load_per_node = point_load / len(tip_nodes)
             for node in tip_nodes:
                 F[2 * node + 1] = -load_per_node  # Negative y-direction
 
-        # TODO: Task 10.14 - Implement distributed load application
+        # Apply distributed load on top surface
         if distributed_load != 0:
-            # Apply as consistent nodal loads on top surface
-            # This requires integration of shape functions
-            pass
+            # Find top surface nodes
+            top_nodes = np.where(
+                np.abs(self.mesh.nodes[:, 1] - self.height / 2) < 1e-10
+            )[0]
+            # Sort by x
+            top_nodes = top_nodes[np.argsort(self.mesh.nodes[top_nodes, 0])]
+
+            # Apply consistent nodal loads (trapezoidal rule)
+            if len(top_nodes) > 1:
+                for i in range(len(top_nodes) - 1):
+                    n1, n2 = top_nodes[i], top_nodes[i + 1]
+                    dx = self.mesh.nodes[n2, 0] - self.mesh.nodes[n1, 0]
+                    load_segment = distributed_load * dx / 2
+                    F[2 * n1 + 1] -= load_segment
+                    F[2 * n2 + 1] -= load_segment
 
         return fixed_dofs, F
 
     def solve(
         self,
-        tip_load: float = 0.0,
+        point_load: float = 0.0,
         distributed_load: float = 0.0,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> FEMResult:
         """
-        Solve the FEM problem and return displacements and strains.
+        Solve the FEM problem and return results.
 
         Args:
-            tip_load: Point load at tip [N]
+            point_load: Point load at tip [N]
             distributed_load: Uniformly distributed load [N/m]
 
         Returns:
-            displacements: Nodal displacements (n_nodes, 2)
-            strains: Element strains (n_elements, 3)
-            stresses: Element stresses (n_elements, 3)
-
-        TODO: Task 10.15 - Implement FEM solver
-        TODO: Task 10.16 - Add post-processing for strains/stresses
+            FEMResult object with displacements, strains, stresses
         """
         # Assemble stiffness matrix
         if self._K_global is None:
             self._K_global = self._assemble_global_stiffness()
 
         # Get boundary conditions
-        fixed_dofs, F = self.setup_cantilever_bc(tip_load, distributed_load)
+        fixed_dofs, F = self.setup_cantilever_bc(point_load, distributed_load)
 
         # Apply boundary conditions (penalty method or reduction)
         K_mod = self._K_global.copy()
@@ -404,11 +463,17 @@ class CantileverFEM:
         # Reshape to (n_nodes, 2)
         displacements = U.reshape(-1, 2)
 
-        # TODO: Task 10.17 - Compute strains and stresses at element centers
+        # Compute strains and stresses at element centers
         strains = self._compute_element_strains(displacements)
         stresses = strains @ self.D.T  # σ = D * ε
 
-        return displacements, strains, stresses
+        return FEMResult(
+            displacements=displacements,
+            strains=strains,
+            stresses=stresses,
+            mesh=self.mesh,
+            fem=self,
+        )
 
     def _compute_element_strains(self, displacements: np.ndarray) -> np.ndarray:
         """
@@ -420,7 +485,6 @@ class CantileverFEM:
         Returns:
             Element strains at centers (n_elements, 3)
 
-        TODO: Task 10.18 - Implement strain computation
         """
         strains = np.zeros((self.mesh.n_elements, 3))
 
@@ -465,7 +529,6 @@ class CantileverFEM:
             x_coords: Positions along beam
             w: Vertical deflections
 
-        TODO: Task 10.19 - Implement centerline extraction
         """
         # Find nodes along centerline
         centerline_mask = np.abs(self.mesh.nodes[:, 1]) < 1e-10
@@ -498,7 +561,6 @@ class CantileverFEM:
             x_coords: Positions along beam
             epsilon_xx: Axial strains
 
-        TODO: Task 10.20 - Implement surface strain extraction
         """
         # Determine y threshold for surface elements
         if surface == "top":

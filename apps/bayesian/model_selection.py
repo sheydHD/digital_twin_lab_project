@@ -77,9 +77,6 @@ class BayesianModelSelector:
     criteria to determine which theory is most appropriate for
     a given beam configuration.
 
-    TODO: Task 21.1 - Implement full model selection pipeline
-    TODO: Task 21.2 - Add sequential model selection for multiple models
-    TODO: Task 21.3 - Implement model averaging
     """
 
     # Bayes factor thresholds (Kass & Raftery, 1995)
@@ -102,17 +99,28 @@ class BayesianModelSelector:
         """
         Compare two calibrated models using Bayesian criteria.
 
+        IMPORTANT - Bayes Factor Convention:
+        ---------------------------------
+        M1 (numerator)   = result1 (typically Euler-Bernoulli)
+        M2 (denominator) = result2 (typically Timoshenko)
+        
+        BF = P(Data | M1) / P(Data | M2)
+        log_BF = log P(Data | M1) - log P(Data | M2)
+        
+        Interpretation:
+        - log_BF > 0  =>  Evidence FAVORS M1 (result1, typically EB)
+        - log_BF < 0  =>  Evidence FAVORS M2 (result2, typically Timoshenko)
+        - log_BF ≈ 0  =>  Inconclusive, models equally supported
+
         Args:
-            result1: Calibration result for first model
-            result2: Calibration result for second model
+            result1: Calibration result for first model (M1, numerator)
+            result2: Calibration result for second model (M2, denominator)
             use_marginal_likelihood: If True, use marginal likelihood;
-                                    otherwise use information criteria
+                                    otherwise use information criteria (WAIC)
 
         Returns:
             ModelComparisonResult with comparison metrics
 
-        TODO: Task 21.4 - Implement model comparison
-        TODO: Task 21.5 - Add uncertainty estimation for Bayes factors
         """
         if use_marginal_likelihood:
             if result1.marginal_likelihood_estimate is None or \
@@ -122,20 +130,24 @@ class BayesianModelSelector:
                     "Use information criteria or compute marginal likelihood first."
                 )
 
+            # log_BF = log P(D|M1) - log P(D|M2)
             log_ml1 = result1.marginal_likelihood_estimate
             log_ml2 = result2.marginal_likelihood_estimate
             log_bf = log_ml1 - log_ml2
         else:
-            # Use WAIC as approximation (lower is better)
-            # Note: WAIC difference approximates 2 * log BF
+            # Use WAIC (elpd_waic) as approximation to log marginal likelihood
+            # Note: elpd = expected log pointwise predictive density (HIGHER is better)
+            # elpd approximates log P(D|M), so elpd_diff approximates log_BF
             if result1.waic is None or result2.waic is None:
                 raise ValueError("WAIC not computed for one or both models")
 
-            waic_diff = result1.waic - result2.waic
-            log_bf = -waic_diff / 2  # Convert WAIC to approximate log BF
+            # log_BF ≈ elpd_M1 - elpd_M2 (positive favors M1)
+            elpd_diff = result1.waic - result2.waic
+            log_bf = elpd_diff
 
-        # Compute Bayes factor
-        bf = np.exp(log_bf)
+        # Compute Bayes factor: BF = exp(log_BF)
+        # BF > 1 favors M1, BF < 1 favors M2
+        bf = np.exp(np.clip(log_bf, -500, 500))  # Clip to prevent overflow
 
         # Interpret evidence
         evidence = self._interpret_bayes_factor(log_bf)
@@ -209,9 +221,6 @@ class BayesianModelSelector:
         Returns:
             Dictionary with analysis results and recommendations
 
-        TODO: Task 22.1 - Implement aspect ratio study analysis
-        TODO: Task 22.2 - Find transition region between theories
-        TODO: Task 22.3 - Generate practical guidelines
         """
         if len(eb_results) != len(timo_results) != len(aspect_ratios):
             raise ValueError("Mismatched result lengths")
@@ -267,8 +276,6 @@ class BayesianModelSelector:
         Returns:
             Estimated transition aspect ratio, or None if not found
 
-        TODO: Task 22.4 - Implement transition point detection
-        TODO: Task 22.5 - Add uncertainty estimation for transition
         """
         L_h = np.array(aspect_ratios)
         bf = np.array(log_bfs)
@@ -306,9 +313,6 @@ class BayesianModelSelector:
         Returns:
             Dictionary with guideline text
 
-        TODO: Task 23.1 - Develop comprehensive guidelines
-        TODO: Task 23.2 - Add frequency-dependent guidelines
-        TODO: Task 23.3 - Include uncertainty/confidence levels
         """
         guidelines = {}
 
@@ -375,7 +379,6 @@ def compute_bayes_factor_direct(
     Returns:
         (log_bayes_factor, bayes_factor)
 
-    TODO: Task 24.1 - Implement more robust Bayes factor estimation
     """
     # Get log-likelihood values
     ll_eb = eb_result.log_likelihood.sum(axis=-1).flatten()

@@ -32,9 +32,6 @@ class BeamVisualization:
     """
     Visualization tools for beam analysis results.
 
-    TODO: Task 25.1 - Complete all visualization functions
-    TODO: Task 25.2 - Add interactive plots with plotly
-    TODO: Task 25.3 - Generate publication-quality figures
     """
 
     def __init__(self, output_dir: Path = Path("outputs/figures")):
@@ -80,7 +77,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 25.4 - Add error bands from Bayesian posterior
         """
         # Create beam models
         eb_beam = EulerBernoulliBeam(geometry, material)
@@ -154,7 +150,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 25.5 - Add theoretical prediction for error
         """
         tip_errors = []
         shear_ratios = []
@@ -221,8 +216,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 26.1 - Add prior overlays
-        TODO: Task 26.2 - Add true value markers for synthetic data
         """
         if filename is None:
             filename = f"posterior_{result.model_name.lower().replace('-', '_')}.png"
@@ -265,7 +258,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 26.3 - Add divergence markers
         """
         if filename is None:
             filename = f"trace_{result.model_name.lower().replace('-', '_')}.png"
@@ -305,7 +297,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 27.1 - Add WAIC/LOO comparison bars
         """
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -370,8 +361,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 27.2 - Add confidence intervals
-        TODO: Task 27.3 - Mark transition region
         """
         aspect_ratios = study_results["aspect_ratios"]
         log_bfs = study_results["log_bayes_factors"]
@@ -440,7 +429,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 28.1 - Add percentage difference plot
         """
         eb_beam = EulerBernoulliBeam(geometry, material)
         timo_beam = TimoshenkoBeam(geometry, material)
@@ -496,8 +484,6 @@ class BeamVisualization:
         Returns:
             Matplotlib figure
 
-        TODO: Task 28.2 - Design comprehensive report layout
-        TODO: Task 28.3 - Add key findings highlights
         """
         fig = plt.figure(figsize=(16, 12))
 

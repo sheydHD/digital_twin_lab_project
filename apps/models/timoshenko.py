@@ -102,9 +102,6 @@ class TimoshenkoBeam(BaseBeamModel):
         Returns:
             Deflection values at each position [m]
 
-        TODO: Task 5.1 - Implement Timoshenko deflection with shear correction
-        TODO: Task 5.2 - Verify additional shear deflection term
-        TODO: Task 5.3 - Compare with Euler-Bernoulli for slender beams
         """
         x = np.asarray(x)
         L = self.geometry.length
@@ -115,27 +112,26 @@ class TimoshenkoBeam(BaseBeamModel):
         w = np.zeros_like(x, dtype=float)
 
         # Point load at tip contribution
+        # Note: Positive P (downward) produces negative deflection (downward)
         if load.point_load != 0:
             P = load.point_load
             # Bending contribution (same as Euler-Bernoulli)
-            w_bending = (P * x**2 / (6 * EI)) * (3 * L - x)
+            w_bending = -(P * x**2 / (6 * EI)) * (3 * L - x)
 
-            # TODO: Task 5.4 - Implement shear contribution for point load
             # Shear contribution: additional deflection due to shear deformation
-            # Hint: w_shear = P * x / (κGA)
-            w_shear = P * x / kGA
+            w_shear = -(P * x / kGA)
 
             w += w_bending + w_shear
 
         # Distributed load contribution
+        # Note: Positive q (downward) produces negative deflection (downward)
         if load.distributed_load != 0:
             q = load.distributed_load
             # Bending contribution (same as Euler-Bernoulli)
-            w_bending = (q * x**2 / (24 * EI)) * (6 * L**2 - 4 * L * x + x**2)
+            w_bending = -(q * x**2 / (24 * EI)) * (6 * L**2 - 4 * L * x + x**2)
 
-            # TODO: Task 5.5 - Implement shear contribution for distributed load
-            # Hint: w_shear = q * x * (L - x/2) / (κGA)
-            w_shear = q * x * (L - x / 2) / kGA
+            # Shear contribution
+            w_shear = -(q * x * (L - x / 2) / kGA)
 
             w += w_bending + w_shear
 
@@ -143,7 +139,7 @@ class TimoshenkoBeam(BaseBeamModel):
         if load.moment != 0:
             M0 = load.moment
             # Moment does not produce shear force, so only bending contribution
-            w_moment = (M0 * x**2) / (2 * EI)
+            w_moment = -(M0 * x**2) / (2 * EI)
             w += w_moment
 
         return w
@@ -168,8 +164,6 @@ class TimoshenkoBeam(BaseBeamModel):
         Returns:
             Cross-section rotation values at each position [rad]
 
-        TODO: Task 6.1 - Implement Timoshenko rotation (ψ ≠ dw/dx)
-        TODO: Task 6.2 - Compute shear angle γ separately
         """
         x = np.asarray(x)
         L = self.geometry.length
@@ -181,7 +175,6 @@ class TimoshenkoBeam(BaseBeamModel):
         # Point load contribution
         if load.point_load != 0:
             P = load.point_load
-            # TODO: Task 6.3 - Implement rotation for point load
             # In Timoshenko theory, ψ comes from integrating M/EI
             # For cantilever with tip load: ψ(x) = (P*x/(2EI))*(2L - x)
             # This is the same as Euler-Bernoulli because M(x) is the same
@@ -191,7 +184,6 @@ class TimoshenkoBeam(BaseBeamModel):
         # Distributed load contribution
         if load.distributed_load != 0:
             q = load.distributed_load
-            # TODO: Task 6.4 - Implement rotation for distributed load
             psi_dist = (q * x / (6 * EI)) * (3 * L**2 - 3 * L * x + x**2)
             psi += psi_dist
 
@@ -221,7 +213,6 @@ class TimoshenkoBeam(BaseBeamModel):
         Returns:
             Shear angle at each position [rad]
 
-        TODO: Task 6.5 - Implement shear angle computation
         """
         V = self.compute_shear(x, load)
         kGA = self.shear_rigidity
@@ -249,8 +240,6 @@ class TimoshenkoBeam(BaseBeamModel):
         Returns:
             Strain values at each position [-]
 
-        TODO: Task 7.1 - Verify strain formulation for Timoshenko
-        TODO: Task 7.2 - Consider shear strain component for completeness
         """
         x = np.asarray(x)
         E = self.material.elastic_modulus
@@ -281,7 +270,6 @@ class TimoshenkoBeam(BaseBeamModel):
         Returns:
             Shear strain at each position [-]
 
-        TODO: Task 7.3 - Implement shear strain computation
         """
         V = self.compute_shear(x, load)
         kGA = self.shear_rigidity
@@ -308,10 +296,6 @@ class TimoshenkoBeam(BaseBeamModel):
         Returns:
             Natural frequencies [Hz]
 
-        TODO: Task 8.1 - Implement Timoshenko frequency equation
-        TODO: Task 8.2 - Account for rotary inertia effects
-        TODO: Task 8.3 - Compare frequency reduction vs Euler-Bernoulli
-        TODO: Task 8.4 - Validate against published results
         """
         E = self.material.elastic_modulus
         I = self.geometry.moment_of_inertia
@@ -341,7 +325,6 @@ class TimoshenkoBeam(BaseBeamModel):
         for i in range(min(n_modes, len(beta_L_eb))):
             beta_L = beta_L_eb[i]
 
-            # TODO: Task 8.5 - Implement Timoshenko frequency correction
             # Approximate correction factor for Timoshenko beam
             # The correction becomes significant for β*L values and low L/h ratios
             #
@@ -371,7 +354,7 @@ class TimoshenkoBeam(BaseBeamModel):
             load: Load case definition
 
         Returns:
-            Tip deflection [m]
+            Tip deflection [m] (negative for downward)
         """
         L = self.geometry.length
         EI = self.flexural_rigidity
@@ -381,16 +364,16 @@ class TimoshenkoBeam(BaseBeamModel):
 
         if load.point_load != 0:
             P = load.point_load
-            # Bending + Shear contributions
-            w_tip += P * L**3 / (3 * EI) + P * L / kGA
+            # Bending + Shear contributions (negative for downward)
+            w_tip += -(P * L**3 / (3 * EI) + P * L / kGA)
 
         if load.distributed_load != 0:
             q = load.distributed_load
-            # Bending + Shear contributions
-            w_tip += q * L**4 / (8 * EI) + q * L**2 / (2 * kGA)
+            # Bending + Shear contributions (negative for downward)
+            w_tip += -(q * L**4 / (8 * EI) + q * L**2 / (2 * kGA))
 
         if load.moment != 0:
-            w_tip += load.moment * L**2 / (2 * EI)
+            w_tip += -(load.moment * L**2 / (2 * EI))
 
         return w_tip
 
@@ -407,7 +390,6 @@ class TimoshenkoBeam(BaseBeamModel):
         Returns:
             Ratio of shear deflection to total deflection [-]
 
-        TODO: Task 9.1 - Use this metric for model selection criteria
         """
         L = self.geometry.length
         EI = self.flexural_rigidity

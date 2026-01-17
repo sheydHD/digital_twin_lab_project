@@ -68,9 +68,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         Returns:
             Deflection values at each position [m]
 
-        TODO: Task 1.1 - Verify deflection formulas against analytical solutions
-        TODO: Task 1.2 - Add validation for input ranges
-        TODO: Task 1.3 - Implement superposition for combined loading
         """
         x = np.asarray(x)
         L = self.geometry.length
@@ -80,27 +77,23 @@ class EulerBernoulliBeam(BaseBeamModel):
         w = np.zeros_like(x, dtype=float)
 
         # Point load at tip contribution
+        # Note: Positive P (downward) produces negative deflection (downward)
         if load.point_load != 0:
             P = load.point_load
-            # TODO: Task 1.4 - Implement point load deflection formula
-            # Hint: w_P = (P * x**2 / (6 * EI)) * (3 * L - x)
-            w_point = (P * x**2 / (6 * EI)) * (3 * L - x)
+            w_point = -(P * x**2 / (6 * EI)) * (3 * L - x)
             w += w_point
 
         # Distributed load contribution
+        # Note: Positive q (downward) produces negative deflection (downward)
         if load.distributed_load != 0:
             q = load.distributed_load
-            # TODO: Task 1.5 - Implement distributed load deflection formula
-            # Hint: w_q = (q * x**2 / (24 * EI)) * (6 * L**2 - 4 * L * x + x**2)
-            w_dist = (q * x**2 / (24 * EI)) * (6 * L**2 - 4 * L * x + x**2)
+            w_dist = -(q * x**2 / (24 * EI)) * (6 * L**2 - 4 * L * x + x**2)
             w += w_dist
 
         # Applied moment contribution
         if load.moment != 0:
             M0 = load.moment
-            # TODO: Task 1.6 - Implement moment deflection formula
-            # Hint: w_M = (M0 * x**2) / (2 * EI)
-            w_moment = (M0 * x**2) / (2 * EI)
+            w_moment = -(M0 * x**2) / (2 * EI)
             w += w_moment
 
         return w
@@ -122,8 +115,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         Returns:
             Rotation values at each position [rad]
 
-        TODO: Task 2.1 - Derive rotation formulas from deflection
-        TODO: Task 2.2 - Validate rotation at boundaries (θ(0) = 0 for cantilever)
         """
         x = np.asarray(x)
         L = self.geometry.length
@@ -135,7 +126,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         # Point load contribution
         if load.point_load != 0:
             P = load.point_load
-            # TODO: Task 2.3 - Implement point load rotation formula
             # Hint: θ_P = (P * x / (2 * EI)) * (2 * L - x)
             theta_point = (P * x / (2 * EI)) * (2 * L - x)
             theta += theta_point
@@ -143,7 +133,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         # Distributed load contribution
         if load.distributed_load != 0:
             q = load.distributed_load
-            # TODO: Task 2.4 - Implement distributed load rotation formula
             # Hint: θ_q = (q * x / (6 * EI)) * (3 * L**2 - 3 * L * x + x**2)
             theta_dist = (q * x / (6 * EI)) * (3 * L**2 - 3 * L * x + x**2)
             theta += theta_dist
@@ -151,7 +140,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         # Applied moment contribution
         if load.moment != 0:
             M0 = load.moment
-            # TODO: Task 2.5 - Implement moment rotation formula
             theta_moment = (M0 * x) / EI
             theta += theta_moment
 
@@ -176,8 +164,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         Returns:
             Strain values at each position [-]
 
-        TODO: Task 3.1 - Verify strain distribution across beam height
-        TODO: Task 3.2 - Add strain measurement locations for sensor placement
         """
         x = np.asarray(x)
         E = self.material.elastic_modulus
@@ -188,7 +174,6 @@ class EulerBernoulliBeam(BaseBeamModel):
 
         # Axial strain from bending: ε = -y * κ = -y * M / (EI)
         # Note: Positive y is below neutral axis, positive M causes compression above
-        # TODO: Task 3.3 - Implement strain formula
         strain = -y * M / (E * I)
 
         return strain
@@ -211,9 +196,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         Returns:
             Natural frequencies [Hz]
 
-        TODO: Task 4.1 - Solve transcendental equation for eigenvalues
-        TODO: Task 4.2 - Validate against known cantilever frequencies
-        TODO: Task 4.3 - Compare with Timoshenko frequencies at high modes
         """
         E = self.material.elastic_modulus
         I = self.geometry.moment_of_inertia
@@ -226,7 +208,6 @@ class EulerBernoulliBeam(BaseBeamModel):
         beta_L_approx = [1.8751, 4.6941, 7.8548, 10.9955, 14.1372,
                         17.2788, 20.4204, 23.5619, 26.7035, 29.8451]
 
-        # TODO: Task 4.4 - Implement numerical solution for eigenvalues
         # For now, use approximate values
         frequencies = np.zeros(n_modes)
 
@@ -265,7 +246,7 @@ class EulerBernoulliBeam(BaseBeamModel):
             load: Load case definition
 
         Returns:
-            Tip deflection [m]
+            Tip deflection [m] (negative for downward)
         """
         L = self.geometry.length
         EI = self.flexural_rigidity
@@ -273,13 +254,13 @@ class EulerBernoulliBeam(BaseBeamModel):
         w_tip = 0.0
 
         if load.point_load != 0:
-            w_tip += load.point_load * L**3 / (3 * EI)
+            w_tip += -load.point_load * L**3 / (3 * EI)
 
         if load.distributed_load != 0:
-            w_tip += load.distributed_load * L**4 / (8 * EI)
+            w_tip += -load.distributed_load * L**4 / (8 * EI)
 
         if load.moment != 0:
-            w_tip += load.moment * L**2 / (2 * EI)
+            w_tip += -load.moment * L**2 / (2 * EI)
 
         return w_tip
 
