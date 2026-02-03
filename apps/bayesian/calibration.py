@@ -15,8 +15,11 @@ Reference:
 - PyMC documentation: https://www.pymc.io/
 """
 
+from matplotlib.pylab import mean, multivariate_normal
 import numpy as np
+from scipy.special import logsumexp
 import pymc as pm
+#from pymc_extras import bridgesampling
 import arviz as az
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Callable
@@ -276,6 +279,7 @@ class BayesianCalibrator(ABC):
         print(f"{'='*60}")
 
         # Build model
+        self._last_data = data
         self._model = self._build_pymc_model(data, data_type)
 
         # Run MCMC with better initialization and timeout
@@ -326,7 +330,7 @@ class BayesianCalibrator(ABC):
             loo=float(loo_result.elpd_loo),      # Access elpd_loo attribute
             convergence_diagnostics=convergence,
         )
-
+    
     def _get_initial_values(self, data: SyntheticDataset) -> Dict:
         """
         Compute good initial values for MCMC to prevent stalling.
@@ -348,10 +352,154 @@ class BayesianCalibrator(ABC):
             initvals["sigma"] = 1e-7  # Small observation noise
             
         return initvals
+    
+
+    def _extract_posterior_matrix(self):
+        posterior = self._trace.posterior
+        var_names = list(self.priors.keys())
+
+        samples = []
+        for v in var_names:
+            s = posterior[v].values.reshape(-1)
+            samples.append(s)
+
+        theta = np.column_stack(samples)
+        return theta, var_names
+    
+    def _log_prior(self, theta, var_names):
+        logp = 0.0
+        for i, name in enumerate(var_names):
+            prior = self.priors[name]
+            x = theta[:, i]
+            print(f"prior distribution is {prior.distribution}")
+            if prior.distribution == "normal":
+                from scipy.stats import norm
+                logp += norm.logpdf(x, prior.params["mu"], prior.params["sigma"])
+
+            elif prior.distribution == "lognormal":
+                from scipy.stats import lognorm
+                sigma = prior.params["sigma"]
+                mu = prior.params["mu"]
+                logp += lognorm.logpdf(x, s=sigma, scale=np.exp(mu))
+
+            elif prior.distribution == "halfnormal":
+                from scipy.stats import halfnorm
+                logp += halfnorm.logpdf(x, scale=prior.params["sigma"])
+
+        return logp
+
+    def _bridge_sampling(self, n_iter=1000):
+        from scipy.stats import multivariate_normal, norm
+        from scipy.special import logsumexp
+                 
+        data = self._last_data
+        if hasattr(data, "x_disp") and hasattr(data, "displacements"):
+            x = np.asarray(data.x_disp)
+            y_obs = np.asarray(data.displacements)
+            sigma_from_data = getattr(data, "displacement_noise_std", None)
+        elif hasattr(data, "x_strain") and hasattr(data, "strains"):
+            x = np.asarray(data.x_strain)
+            y_obs = np.asarray(data.strains)
+            sigma_from_data = getattr(data, "strain_noise_std", None)
+        else:
+            raise RuntimeError("SyntheticDataset missing displacement/strain fields (x_disp/displacements or x_strain/strains)")
+
+        geometry = getattr(data, "geometry", None)
+        load_case = getattr(data, "load_case", None)
+
+        # sensible default sigma if not present
+        if sigma_from_data is None:
+            sigma_from_data = max(1e-12, np.std(y_obs) * 1e-2)
+
+        # 1. Posterior samples
+        theta_post, var_names = self._extract_posterior_matrix()
+        n_post, d = theta_post.shape
+
+        # 2. Proposal q(theta): MVN fit to posterior
+        mu = theta_post.mean(axis=0)
+        #std = theta_post.std(axis=0)
+        #theta_std = (theta_post - mu) / std
+        #cov_std = np.cov(theta_std.T)
+        cov = np.cov(theta_post.T)
+        w, V = np.linalg.eigh(cov)
+        w = np.maximum(w, 1e-8 * np.max(w))
+        cov = V @ np.diag(w) @ V.T
+        proposal = multivariate_normal(mean=mu, cov=10.0*cov)
+
+        # 3. Draw proposal samples
+        theta_prop = proposal.rvs(size=n_post)
+        if theta_prop.ndim == 1:
+            theta_prop = theta_prop.reshape(1, -1)
+
+        # 4. Log densities
+        log_q_post = proposal.logpdf(theta_post)
+        log_q_prop = proposal.logpdf(theta_prop)
+
+        log_prior_post = self._log_prior(theta_post, var_names)
+        log_prior_prop = self._log_prior(theta_prop, var_names)
+        
+        def eval_log_lik(theta_array):
+            logs = np.empty(theta_array.shape[0], dtype=float)
+            for i, th in enumerate(theta_array):
+                point = dict(zip(var_names, th))
+                # forward model expected to accept (params, x_locations, geometry, load)
+                y_pred = self._forward_model(point, x, geometry, load_case)
+                # determine sigma: prefer sigma in param, else dataset sigma_from_data
+                sigma = point.get("sigma", sigma_from_data)
+                # allow sigma array or scalar
+                sigma_arr = np.asarray(sigma)
+                # if sigma is relative fraction (same shape as y_pred?), ensure positive
+                if sigma_arr.size == 1:
+                    logs[i] = norm.logpdf(y_obs, loc=y_pred, scale=float(sigma_arr)).sum()
+                else:
+                    logs[i] = norm.logpdf(y_obs, loc=y_pred, scale=sigma_arr).sum()
+            return logs
+        log_lik_post = eval_log_lik(theta_post)
+        log_lik_prop = eval_log_lik(theta_prop)
+
+        log_post_post = log_prior_post + log_lik_post
+        log_post_prop = log_prior_prop + log_lik_prop
+
+        # 5. Meng–Wong iteration
+        N_p = len(log_post_post)
+        N_q = len(log_post_prop)
+        alpha = N_p / (N_p + N_q)
+        logZ = 0.0
+        for _ in range(n_iter):
+            # log weights for proposal samples
+            log_w_prop = log_post_prop - log_q_prop
+            log_denom_prop = np.log(alpha) + log_w_prop
+            log_denom_prop = np.logaddexp(log_denom_prop, np.log(1 - alpha) + logZ)
+
+            num = logsumexp(log_w_prop - log_denom_prop) - np.log(N_q)
+
+            # log weights for posterior samples
+            log_w_post = -log_q_post  # since f/q cancels with posterior draws
+            log_denom_post = np.log(alpha) + (log_post_post - log_q_post)
+            log_denom_post = np.logaddexp(log_denom_post, np.log(1 - alpha) + logZ)
+
+            den = logsumexp(log_w_post - log_denom_post) - np.log(N_p)
+
+            logZ_new = num - den
+
+            if np.abs(logZ_new - logZ) < 1e-6:
+                break
+            logZ = logZ_new
+        """for _ in range(n_iter):
+            num = logsumexp(log_post_prop - log_q_prop)
+            den = logsumexp(log_post_post - log_q_post)
+            logZ_new = num - den
+
+            if np.abs(logZ_new - logZ) < 1e-6:
+                break
+            logZ = logZ_new
+        """
+        return logZ
+    
 
     def compute_marginal_likelihood(
         self,
-        method: str = "harmonic_mean",
+        method: str = "bridge_sampling",#"harmonic_mean",
     ) -> float:
         """
         Estimate marginal likelihood p(y|M) for model comparison.
@@ -393,7 +541,16 @@ class BayesianCalibrator(ABC):
             return log_ml
 
         elif method == "bridge_sampling":
-            raise NotImplementedError("Bridge sampling not yet implemented")
+            from scipy.special import logsumexp
+            neg_log_lik = -log_lik
+            n = len(neg_log_lik)
+            log_mean_exp = logsumexp(neg_log_lik) - np.log(n)
+            log_ml = -log_mean_exp
+            print(f"Marginal likelihood (harmonic mean approx): {log_ml:.2f}")
+            log_ml = self._bridge_sampling()
+            print(f"Marginal likelihood (bridge sampling): {log_ml:.2f}")
+            return log_ml
+            #raise NotImplementedError("Bridge sampling not yet implemented")
 
         elif method == "smc":
             raise NotImplementedError("SMC estimation not yet implemented")

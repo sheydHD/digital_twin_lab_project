@@ -49,8 +49,11 @@ def load_config(config_path: str) -> Dict[str, Any]:
     if not config_path.exists():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-    with open(config_path, "r") as f:
+    #with open(config_path, "r") as f:
+    #    config = yaml.safe_load(f)
+    with open(config_path, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
+
 
     # Convert any numeric strings (handles scientific notation edge cases)
     config = _convert_numeric_strings(config)

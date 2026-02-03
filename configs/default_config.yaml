@@ -7,14 +7,16 @@ beam_parameters:
   width: 0.1   # Beam width [m]
   # Aspect ratios (L/h) to study - ranging from thick to slender beams
   aspect_ratios:
-    - 5    # Very thick beam - Timoshenko expected
-    - 8    # Thick beam
-    - 10   # Moderate
-    - 12   # Transition region expected
-    - 15   # Transition region
-    - 20   # Moderately slender
-    - 30   # Slender beam - EB expected
-    - 50   # Very slender beam
+    - 15
+    - 20
+    - 30
+    - 40
+    - 45
+    - 50
+    - 55
+    - 60
+    - 65  
+    - 80   # Moderate
 
 # Material properties (Structural Steel)
 material:
