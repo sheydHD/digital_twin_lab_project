@@ -311,7 +311,7 @@ class TimoshenkoBeam(BaseBeamModel):
 
         # Slenderness ratio
         r = np.sqrt(I / A)  # radius of gyration
-        slenderness = L / r
+        L / r
 
         # Shear correction parameters
         # s² = EI / (κGAL²) - represents shear deformation importance
@@ -420,8 +420,8 @@ class TimoshenkoBeam(BaseBeamModel):
 
         x = np.linspace(0, self.geometry.length, 100)
 
-        w_eb = eb_beam.compute_deflection(x, load)
-        w_t = self.compute_deflection(x, load)
+        eb_beam.compute_deflection(x, load)
+        self.compute_deflection(x, load)
 
         tip_eb = eb_beam.tip_deflection(load)
         tip_t = self.tip_deflection(load)

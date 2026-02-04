@@ -103,17 +103,20 @@ digital_twin_lab_project/
 │   │
 │   ├── fem/                     # Finite Element Method
 │   │   ├── __init__.py
-│   │   ├── cantilever_fem.py    # Legacy 2D plane stress FEM (not used)
+│   │   ├── cantilever_fem.py    # 2D plane stress FEM (validation)
 │   │   └── beam_fem.py          # 1D Timoshenko beam FEM (ground truth)
 │   │
 │   ├── data/                    # Data generation
 │   │   ├── __init__.py
-│   │   └── synthetic_generator.py  # Synthetic measurement data from 1D FEM
+│   │   └── synthetic_generator.py  # Synthetic measurement data from FEM
 │   │
 │   ├── bayesian/                # Bayesian inference
 │   │   ├── __init__.py
 │   │   ├── calibration.py       # Bayesian parameter calibration with PyMC
-│   │   └── model_selection.py   # Model comparison and Bayes factors
+│   │   ├── model_selection.py   # Model comparison and Bayes factors
+│   │   ├── normalization.py     # Data normalization for stable MCMC
+│   │   ├── bridge_sampling.py   # Marginal likelihood estimation
+│   │   └── hyperparameter_optimization.py  # Prior tuning with Optuna
 │   │
 │   ├── analysis/                # Analysis and visualization
 │   │   ├── __init__.py
@@ -135,12 +138,28 @@ digital_twin_lab_project/
 ├── tests/                       # Unit tests
 │   ├── __init__.py
 │   ├── test_beam_models.py      # Tests for beam models
-│   └── test_fem.py              # Tests for FEM module
+│   ├── test_fem.py              # Tests for FEM module
+│   ├── test_bayesian.py         # Tests for Bayesian calibration
+│   └── test_normalization.py    # Tests for data normalization
+│
+├── examples/                    # Example scripts
+│   ├── quick_demo.py            # Simple demonstration
+│   ├── detailed_analysis.py     # Comprehensive visualizations
+│   └── parameter_analysis.py    # Parameter recovery analysis
+│
+├── docs/                        # Documentation
+│   ├── INDEX.md                 # Documentation index
+│   ├── GETTING_STARTED.md       # Getting started guide
+│   ├── API.md                   # API reference
+│   ├── ARCHITECTURE.md          # System architecture
+│   ├── DEVELOPMENT.md           # Developer guide
+│   └── internal/                # Internal development docs
 │
 └── outputs/                     # Generated outputs (created at runtime)
-    ├── data/                    # Synthetic datasets
+    ├── data/                    # Synthetic datasets (HDF5)
     ├── figures/                 # Visualization outputs
-    └── reports/                 # Text and JSON reports
+    │   └── detailed/            # Detailed analysis plots
+    └── reports/                 # Text, JSON, and CSV reports
 ```
 
 ## Installation

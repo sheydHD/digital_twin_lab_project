@@ -11,7 +11,7 @@ import yaml
 def _convert_numeric_strings(obj: Any) -> Any:
     """
     Recursively convert numeric strings to floats/ints.
-    
+
     Handles scientific notation like '210e9' or '1.0e-6' that YAML
     may parse as strings.
     """

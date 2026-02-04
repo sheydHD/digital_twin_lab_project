@@ -6,15 +6,16 @@ This script demonstrates the core functionality of the beam models
 without running the full Bayesian pipeline. Useful for initial testing.
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-
 # Add project root to path
 import sys
 from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).parent))
 
-from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
+from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
 from apps.models.euler_bernoulli import EulerBernoulliBeam
 from apps.models.timoshenko import TimoshenkoBeam
 

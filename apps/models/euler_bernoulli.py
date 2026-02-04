@@ -11,7 +11,6 @@ This theory is accurate for long, slender beams where shear deformation is negli
 """
 
 import numpy as np
-from scipy.optimize import brentq
 
 from .base_beam import BaseBeamModel, BeamGeometry, LoadCase, MaterialProperties
 

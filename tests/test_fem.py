@@ -5,7 +5,7 @@ Unit tests for FEM module.
 import numpy as np
 import pytest
 
-from apps.fem.cantilever_fem import CantileverFEM, FEMMesh
+from apps.fem.cantilever_fem import CantileverFEM
 
 
 class TestCantileverFEM:
@@ -80,7 +80,7 @@ class TestCantileverFEM:
         result = fem.solve(point_load=P)
 
         # Get analytical Timoshenko solution for comparison
-        from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
+        from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
         from apps.models.timoshenko import TimoshenkoBeam
 
         geometry = BeamGeometry(length=fem.length, height=fem.height, width=fem.thickness)

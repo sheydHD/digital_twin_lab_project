@@ -8,12 +8,10 @@ Generates comprehensive reports summarizing:
 """
 
 import json
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
-import numpy as np
 import pandas as pd
 
 from apps.bayesian.calibration import CalibrationResult
@@ -222,7 +220,7 @@ class ResultsReporter:
         report.append("-" * 40)
         report.append(f"{'L/h':<10}{'Log BF':<15}{'Recommendation':<20}")
         report.append("-" * 40)
-        for L_h, bf, rec in zip(aspect_ratios, log_bfs, recommendations):
+        for L_h, bf, rec in zip(aspect_ratios, log_bfs, recommendations, strict=False):
             report.append(f"{L_h:<10.1f}{bf:<15.4f}{rec:<20}")
         report.append("")
 
@@ -289,3 +287,126 @@ class ResultsReporter:
 
         filepath = self.output_dir / filename
         df.to_csv(filepath, index=False)
+
+    def generate_frequency_report(
+        self,
+        frequency_results: Dict,
+        filename: str = "frequency_analysis.txt",
+    ) -> str:
+        """
+        Generate frequency analysis report.
+
+        Args:
+            frequency_results: Results from frequency analysis
+            filename: Output filename
+
+        Returns:
+            Report text
+        """
+        report = []
+        report.append("=" * 70)
+        report.append("FREQUENCY-BASED MODEL SELECTION ANALYSIS")
+        report.append("=" * 70)
+        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report.append("")
+
+        # Summary
+        summary = frequency_results.get("summary", {})
+        report.append("SUMMARY")
+        report.append("-" * 40)
+        report.append(f"Datasets analyzed: {summary.get('n_datasets_analyzed', 'N/A')}")
+
+        transition_mode = summary.get("typical_transition_mode")
+        if transition_mode:
+            report.append(f"Typical transition mode: {transition_mode}")
+        report.append("")
+
+        # Detailed results per aspect ratio
+        report.append("FREQUENCY ANALYSIS BY ASPECT RATIO")
+        report.append("-" * 40)
+
+        freq_analysis = frequency_results.get("frequency_analysis", [])
+        for result in freq_analysis:
+            L_h = result.get("aspect_ratio", "N/A")
+            report.append(f"\nL/h = {L_h:.1f}:")
+
+            # Natural frequencies
+            eb_freqs = result.get("eb_frequencies_hz", [])
+            timo_freqs = result.get("timoshenko_frequencies_hz", [])
+
+            if eb_freqs and timo_freqs:
+                report.append("  Mode |  EB (Hz)   | Timo (Hz)  | Ratio")
+                report.append("  -----|------------|------------|-------")
+                for i, (f_eb, f_t) in enumerate(zip(eb_freqs[:5], timo_freqs[:5], strict=False)):
+                    ratio = f_t / f_eb if f_eb > 0 else 1.0
+                    report.append(f"    {i+1}  | {f_eb:10.2f} | {f_t:10.2f} | {ratio:.4f}")
+
+            transition = result.get("transition_mode")
+            if transition:
+                report.append(f"  Transition mode: {transition}")
+
+            report.append(f"  Recommendation: {result.get('recommendation', 'N/A')}")
+
+        report.append("")
+        report.append("GUIDELINE")
+        report.append("-" * 40)
+        report.append(summary.get("guideline", "No guideline available"))
+
+        report_text = "\n".join(report)
+
+        filepath = self.output_dir / filename
+        with open(filepath, "w") as f:
+            f.write(report_text)
+
+        return report_text
+
+    def generate_optimization_report(
+        self,
+        optimization_results: Dict,
+        filename: str = "optimization_results.txt",
+    ) -> str:
+        """
+        Generate hyperparameter optimization report.
+
+        Args:
+            optimization_results: Results from Optuna optimization
+            filename: Output filename
+
+        Returns:
+            Report text
+        """
+        report = []
+        report.append("=" * 70)
+        report.append("HYPERPARAMETER OPTIMIZATION RESULTS")
+        report.append("=" * 70)
+        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        report.append("")
+
+        report.append("OPTIMIZATION SUMMARY")
+        report.append("-" * 40)
+        report.append(f"Best score: {optimization_results.get('best_score', 'N/A'):.4f}")
+        report.append(f"Trials completed: {optimization_results.get('n_trials', 'N/A')}")
+        report.append("")
+
+        report.append("BEST PARAMETERS")
+        report.append("-" * 40)
+        best_params = optimization_results.get("best_params", {})
+        for param, value in best_params.items():
+            if isinstance(value, float):
+                report.append(f"  {param}: {value:.6g}")
+            else:
+                report.append(f"  {param}: {value}")
+
+        report.append("")
+        report.append("USAGE")
+        report.append("-" * 40)
+        report.append("To use optimized parameters, update configs/default_config.yaml")
+        report.append("or pass them to run_calibration_with_optimized_params()")
+
+        report_text = "\n".join(report)
+
+        filepath = self.output_dir / filename
+        with open(filepath, "w") as f:
+            f.write(report_text)
+
+        return report_text

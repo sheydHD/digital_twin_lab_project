@@ -9,19 +9,19 @@ Provides plotting functions for:
 - Practical guideline summaries
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-import arviz as az
+from typing import Dict, List, Optional
 
-from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
-from apps.models.euler_bernoulli import EulerBernoulliBeam
-from apps.models.timoshenko import TimoshenkoBeam
+import arviz as az
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+
 from apps.bayesian.calibration import CalibrationResult
 from apps.bayesian.model_selection import ModelComparisonResult
-
+from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+from apps.models.euler_bernoulli import EulerBernoulliBeam
+from apps.models.timoshenko import TimoshenkoBeam
 
 # Set default style
 plt.style.use('seaborn-v0_8-whitegrid')
@@ -118,7 +118,7 @@ class BeamVisualization:
         )
         ax.text(0.02, 0.98, info_text, transform=ax.transAxes,
                fontsize=9, verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+               bbox={'boxstyle': 'round', 'facecolor': 'wheat', 'alpha': 0.5})
 
         plt.tight_layout()
 
@@ -223,7 +223,7 @@ class BeamVisualization:
         # Use ArviZ for posterior plotting
         var_names = params_to_plot if params_to_plot else None
 
-        axes = az.plot_posterior(
+        az.plot_posterior(
             result.trace,
             var_names=var_names,
             figsize=(12, 4),
@@ -264,7 +264,7 @@ class BeamVisualization:
 
         var_names = params_to_plot if params_to_plot else None
 
-        axes = az.plot_trace(
+        az.plot_trace(
             result.trace,
             var_names=var_names,
             figsize=(12, 8),
@@ -312,7 +312,7 @@ class BeamVisualization:
         ax1.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
 
         # Add probability labels on bars
-        for bar, prob in zip(bars, probs):
+        for bar, prob in zip(bars, probs, strict=False):
             ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
                     f'{prob:.2%}', ha='center', va='bottom', fontsize=11)
 
@@ -335,7 +335,7 @@ class BeamVisualization:
         ax2.text(0.1, 0.5, info_text, transform=ax2.transAxes,
                 fontsize=12, verticalalignment='center',
                 family='monospace',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+                bbox={'boxstyle': 'round', 'facecolor': 'wheat', 'alpha': 0.8})
 
         plt.tight_layout()
 
@@ -393,13 +393,13 @@ class BeamVisualization:
 
         guidelines = study_results.get("guidelines", {})
         guide_text = "Practical Guidelines\n" + "="*40 + "\n\n"
-        for key, value in guidelines.items():
+        for _key, value in guidelines.items():
             guide_text += f"{value}\n\n"
 
         ax2.text(0.05, 0.95, guide_text, transform=ax2.transAxes,
                 fontsize=10, verticalalignment='top',
                 family='serif',
-                bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.9))
+                bbox={'boxstyle': 'round', 'facecolor': 'lightyellow', 'alpha': 0.9})
 
         plt.tight_layout()
 
@@ -505,7 +505,7 @@ class BeamVisualization:
         ax2 = fig.add_subplot(gs[0, 2])
         # Aggregate model probabilities
         eb_probs = [c.model1_probability for c in study_results["comparisons"]]
-        timo_probs = [c.model2_probability for c in study_results["comparisons"]]
+        [c.model2_probability for c in study_results["comparisons"]]
         ax2.fill_between(aspect_ratios, 0, eb_probs, alpha=0.5, label='Euler-Bernoulli')
         ax2.fill_between(aspect_ratios, eb_probs, 1, alpha=0.5, label='Timoshenko')
         ax2.set_xlabel('Aspect Ratio (L/h)')
@@ -543,7 +543,7 @@ class BeamVisualization:
 
         ax3.text(0.05, 0.95, summary_text, transform=ax3.transAxes,
                 fontsize=11, verticalalignment='top', family='monospace',
-                bbox=dict(boxstyle='round', facecolor='white', edgecolor='gray'))
+                bbox={'boxstyle': 'round', 'facecolor': 'white', 'edgecolor': 'gray'})
 
         plt.suptitle('Bayesian Model Selection for Beam Theory', fontsize=16, fontweight='bold')
 

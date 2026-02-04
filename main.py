@@ -17,9 +17,7 @@ import sys
 from pathlib import Path
 
 import click
-import yaml
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # Add the project root to Python path
@@ -64,7 +62,7 @@ def print_banner():
 @click.option(
     "--stage",
     "-s",
-    type=click.Choice(["all", "data", "calibration", "analysis", "report"]),
+    type=click.Choice(["all", "data", "calibration", "analysis", "report", "optimize"]),
     default="all",
     help="Pipeline stage to run.",
 )
@@ -75,6 +73,18 @@ def print_banner():
     type=float,
     default=None,
     help="Beam aspect ratios (L/h) to analyze. Can be specified multiple times.",
+)
+@click.option(
+    "--optimize",
+    is_flag=True,
+    default=False,
+    help="Run hyperparameter optimization before calibration.",
+)
+@click.option(
+    "--optimize-trials",
+    type=int,
+    default=20,
+    help="Number of optimization trials (default: 20).",
 )
 @click.option(
     "--verbose",
@@ -94,6 +104,8 @@ def main(
     output_dir: str,
     stage: str,
     aspect_ratios: tuple,
+    optimize: bool,
+    optimize_trials: int,
     verbose: bool,
     debug: bool,
 ):
@@ -140,10 +152,34 @@ def main(
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            if stage == "all":
+            if stage == "optimize":
+                # Run optimization only
+                task = progress.add_task("[cyan]Running hyperparameter optimization...", total=None)
+                orchestrator.run_data_generation()
+                results = orchestrator.run_optimization(n_trials=optimize_trials)
+                progress.update(task, completed=True)
+                console.print("\n[bold green]Optimization completed![/bold green]")
+                console.print(f"Best score: {results['best_score']:.4f}")
+                console.print(f"Best parameters: {results['best_params']}")
+                return
+
+            elif stage == "all":
                 # Run full pipeline
                 task = progress.add_task("[cyan]Running full pipeline...", total=None)
-                results = orchestrator.run_full_pipeline()
+
+                # Optional: run optimization first
+                if optimize:
+                    progress.update(task, description="[cyan]Running hyperparameter optimization...")
+                    orchestrator.run_data_generation()
+                    opt_results = orchestrator.run_optimization(n_trials=optimize_trials)
+                    progress.update(task, description="[cyan]Running calibration with optimized params...")
+                    orchestrator.run_calibration_with_optimized_params(opt_results["best_params"])
+                    orchestrator.run_analysis()
+                    orchestrator.run_frequency_analysis()
+                    results = orchestrator.generate_report()
+                else:
+                    results = orchestrator.run_full_pipeline()
+
                 progress.update(task, completed=True)
 
             elif stage == "data":

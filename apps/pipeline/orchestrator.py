@@ -5,33 +5,25 @@ Coordinates the full Bayesian model selection workflow:
 1. Synthetic data generation
 2. Bayesian calibration of beam models
 3. Model comparison and selection
-4. Analysis and reporting
+4. Frequency analysis
+5. Hyperparameter optimization (optional)
+6. Analysis and reporting
 """
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from rich.console import Console
 from rich.table import Table
 
-from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
-from apps.models.euler_bernoulli import EulerBernoulliBeam
-from apps.models.timoshenko import TimoshenkoBeam
-from apps.fem.cantilever_fem import CantileverFEM
-from apps.data.synthetic_generator import (
-    SyntheticDataGenerator,
-    SensorConfiguration,
-    NoiseModel,
-    SyntheticDataset,
-    save_dataset,
-    load_dataset,
-)
+from apps.analysis.reporter import ResultsReporter
+from apps.analysis.visualization import BeamVisualization
 from apps.bayesian.calibration import (
+    CalibrationResult,
     EulerBernoulliCalibrator,
     TimoshenkoCalibrator,
-    CalibrationResult,
     create_default_priors,
     create_timoshenko_priors,
 )
@@ -39,9 +31,14 @@ from apps.bayesian.model_selection import (
     BayesianModelSelector,
     ModelComparisonResult,
 )
-from apps.analysis.visualization import BeamVisualization
-from apps.analysis.reporter import ResultsReporter
-
+from apps.data.synthetic_generator import (
+    NoiseModel,
+    SensorConfiguration,
+    SyntheticDataGenerator,
+    SyntheticDataset,
+    save_dataset,
+)
+from apps.models.base_beam import LoadCase, MaterialProperties
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -79,6 +76,8 @@ class PipelineOrchestrator:
         self.timo_results: List[CalibrationResult] = []
         self.comparisons: List[ModelComparisonResult] = []
         self.study_results: Optional[Dict] = None
+        self.frequency_results: Optional[Dict] = None
+        self.optimization_results: Optional[Dict] = None
 
     def _setup_components(self) -> None:
         """Set up pipeline components from configuration."""
@@ -160,8 +159,12 @@ class PipelineOrchestrator:
         console.print("\n[cyan]Stage 3: Analyzing model selection...[/cyan]")
         self.run_analysis()
 
-        # Stage 4: Generate reports
-        console.print("\n[cyan]Stage 4: Generating reports...[/cyan]")
+        # Stage 4: Frequency analysis
+        console.print("\n[cyan]Stage 4: Running frequency analysis...[/cyan]")
+        self.run_frequency_analysis()
+
+        # Stage 5: Generate reports
+        console.print("\n[cyan]Stage 5: Generating reports...[/cyan]")
         self.generate_report()
 
         return {
@@ -169,6 +172,7 @@ class PipelineOrchestrator:
             "eb_results": self.eb_results,
             "timo_results": self.timo_results,
             "study_results": self.study_results,
+            "frequency_results": self.frequency_results,
         }
 
     def run_data_generation(self) -> List[SyntheticDataset]:
@@ -199,7 +203,7 @@ class PipelineOrchestrator:
         data_dir = self.output_dir / "data"
         data_dir.mkdir(exist_ok=True)
 
-        for i, dataset in enumerate(self.datasets):
+        for _i, dataset in enumerate(self.datasets):
             L_h = dataset.geometry.aspect_ratio
             save_dataset(dataset, data_dir / f"dataset_Lh_{L_h:.0f}.h5")
 
@@ -234,7 +238,7 @@ class PipelineOrchestrator:
 
             # Get target_accept from config (default 0.95 for stability)
             target_accept = self.config.get("bayesian", {}).get("target_accept", 0.95)
-            
+
             # Euler-Bernoulli calibration
             eb_calibrator = EulerBernoulliCalibrator(
                 priors=eb_priors,
@@ -279,8 +283,11 @@ class PipelineOrchestrator:
         if not self.eb_results or not self.timo_results:
             raise ValueError("Must run calibration before analysis")
 
-        # Model selection
-        selector = BayesianModelSelector()
+        # Model selection with inconclusive threshold handling
+        inconclusive_threshold = self.config.get("model_selection", {}).get(
+            "inconclusive_threshold", 0.5
+        )
+        selector = BayesianModelSelector(inconclusive_threshold=inconclusive_threshold)
 
         self.study_results = selector.analyze_aspect_ratio_study(
             eb_results=self.eb_results,
@@ -292,6 +299,161 @@ class PipelineOrchestrator:
         self._generate_visualizations()
 
         return self.study_results
+
+    def run_frequency_analysis(self) -> Dict:
+        """
+        Analyze model selection across frequencies.
+
+        This addresses the task requirement to analyze "loading frequencies".
+
+        Returns:
+            Frequency analysis results
+        """
+        logger.info("Running frequency analysis...")
+
+        from apps.bayesian.hyperparameter_optimization import FrequencyBasedModelSelector
+
+        freq_selector = FrequencyBasedModelSelector()
+        self.frequency_results = freq_selector.analyze_frequency_study(self.datasets)
+
+        # Print frequency summary
+        console.print("  Frequency analysis complete")
+
+        if self.frequency_results and "summary" in self.frequency_results:
+            summary = self.frequency_results["summary"]
+            if summary.get("typical_transition_mode"):
+                console.print(
+                    f"  Typical transition mode: {summary['typical_transition_mode']}"
+                )
+
+        return self.frequency_results
+
+    def run_optimization(
+        self,
+        n_trials: int = 20,
+        fast_mode: bool = True,
+    ) -> Dict:
+        """
+        Run hyperparameter optimization to improve model selection.
+
+        This uses Optuna to find optimal prior parameters and MCMC settings
+        that maximize model selection accuracy.
+
+        Args:
+            n_trials: Number of optimization trials
+            fast_mode: Use subset of datasets for faster optimization
+
+        Returns:
+            Optimization results with best parameters
+        """
+        logger.info("Running hyperparameter optimization...")
+        console.print("\n[cyan]Running hyperparameter optimization...[/cyan]")
+
+        if not self.datasets:
+            console.print("[yellow]No datasets found. Running data generation...[/yellow]")
+            self.run_data_generation()
+
+        from apps.bayesian.hyperparameter_optimization import BayesianHyperparameterOptimizer
+
+        optimizer = BayesianHyperparameterOptimizer(
+            datasets=self.datasets,
+            output_dir=self.output_dir / "optimization",
+        )
+
+        result = optimizer.optimize(
+            n_trials=n_trials,
+            fast_mode=fast_mode,
+        )
+
+        self.optimization_results = {
+            "best_params": result.best_params,
+            "best_score": result.best_score,
+            "n_trials": result.n_trials,
+        }
+
+        console.print(f"  Best score: {result.best_score:.4f}")
+        console.print(f"  Best parameters: {result.best_params}")
+
+        return self.optimization_results
+
+    def run_calibration_with_optimized_params(
+        self,
+        optimized_params: Optional[Dict] = None,
+    ) -> Dict:
+        """
+        Run calibration using optimized hyperparameters.
+
+        Args:
+            optimized_params: Parameters from optimization (uses defaults if None)
+
+        Returns:
+            Calibration results dictionary
+        """
+        logger.info("Running calibration with optimized parameters...")
+
+        if not self.datasets:
+            console.print("[yellow]No datasets found. Running data generation...[/yellow]")
+            self.run_data_generation()
+
+        from apps.bayesian.hyperparameter_optimization import create_priors_from_params
+
+        if optimized_params is None:
+            # Use default optimized values
+            optimized_params = {
+                "E_prior_sigma": 0.05,
+                "sigma_prior_scale": 1e-6,
+                "nu_prior_sigma": 0.03,
+                "n_samples": 800,
+                "n_tune": 400,
+                "target_accept": 0.95,
+            }
+
+        # Create priors from optimized parameters
+        eb_priors = create_priors_from_params(optimized_params, include_poisson=False)
+        timo_priors = create_priors_from_params(optimized_params, include_poisson=True)
+
+        # Get sampling parameters
+        n_samples = optimized_params.get("n_samples", self.n_samples)
+        n_tune = optimized_params.get("n_tune", self.n_tune)
+        target_accept = optimized_params.get("target_accept", 0.95)
+
+        self.eb_results = []
+        self.timo_results = []
+
+        for i, dataset in enumerate(self.datasets):
+            L_h = dataset.geometry.aspect_ratio
+            console.print(f"\n  Calibrating for L/h = {L_h:.1f} ({i+1}/{len(self.datasets)})")
+
+            # Euler-Bernoulli calibration
+            eb_calibrator = EulerBernoulliCalibrator(
+                priors=eb_priors,
+                n_samples=n_samples,
+                n_tune=n_tune,
+                n_chains=self.n_chains,
+                target_accept=target_accept,
+            )
+            eb_result = eb_calibrator.calibrate(dataset)
+            eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood()
+            self.eb_results.append(eb_result)
+
+            # Timoshenko calibration
+            timo_calibrator = TimoshenkoCalibrator(
+                priors=timo_priors,
+                n_samples=n_samples,
+                n_tune=n_tune,
+                n_chains=self.n_chains,
+                target_accept=target_accept,
+            )
+            timo_result = timo_calibrator.calibrate(dataset)
+            timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood()
+            self.timo_results.append(timo_result)
+
+        console.print(f"\n  Calibrated {len(self.eb_results)} model pairs with optimized params")
+
+        return {
+            "euler_bernoulli": self.eb_results,
+            "timoshenko": self.timo_results,
+        }
 
     def _generate_visualizations(self) -> None:
         """Generate all visualization outputs."""
@@ -400,7 +562,7 @@ class PipelineOrchestrator:
         for L_h, bf, rec in zip(
             self.study_results["aspect_ratios"],
             self.study_results["log_bayes_factors"],
-            self.study_results["recommendations"],
+            self.study_results["recommendations"], strict=False,
         ):
             bf_str = f"{bf:.3f}"
             table.add_row(f"{L_h:.1f}", bf_str, rec)
@@ -418,7 +580,7 @@ class PipelineOrchestrator:
         # Print key guideline
         guidelines = self.study_results.get("guidelines", {})
         if "digital_twin_recommendation" in guidelines:
-            console.print(f"\n[bold cyan]Digital Twin Recommendation:[/bold cyan]")
+            console.print("\n[bold cyan]Digital Twin Recommendation:[/bold cyan]")
             console.print(guidelines["digital_twin_recommendation"])
 
     def load_previous_results(self, results_dir: Path) -> None:

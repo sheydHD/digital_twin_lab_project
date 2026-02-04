@@ -5,7 +5,7 @@ Unit tests for beam model implementations.
 import numpy as np
 import pytest
 
-from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
+from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
 from apps.models.euler_bernoulli import EulerBernoulliBeam
 from apps.models.timoshenko import TimoshenkoBeam
 
@@ -208,7 +208,7 @@ class TestTimoshenkoBeam:
         freq_timo = timo_beam.compute_natural_frequencies(5)
 
         # Timoshenko frequencies should be lower (more flexible model)
-        for f_eb, f_t in zip(freq_eb, freq_timo):
+        for f_eb, f_t in zip(freq_eb, freq_timo, strict=False):
             assert f_t <= f_eb
 
     def test_thick_beam_significant_shear(self):

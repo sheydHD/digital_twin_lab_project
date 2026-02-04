@@ -10,17 +10,27 @@ Key concepts:
 - Model Evidence: p(y|M) = ∫ p(y|θ,M) p(θ|M) dθ
 - Information Criteria: WAIC, LOO-CV as approximations
 
+Methods Available:
+- WAIC/LOO: Fast approximations (default)
+- Bridge Sampling: True marginal likelihood (more accurate)
+
 Reference:
 - Kass & Raftery (1995) "Bayes Factors"
 - Vehtari et al. (2017) "Practical Bayesian model evaluation"
+- Gronau et al. (2017) "bridgesampling: An R Package"
 """
 
-import numpy as np
+import logging
+import warnings
 from dataclasses import dataclass
-from typing import Dict, List, Tuple, Optional
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
 
 from apps.bayesian.calibration import CalibrationResult
+
+logger = logging.getLogger(__name__)
 
 
 class ModelEvidence(Enum):
@@ -86,9 +96,20 @@ class BayesianModelSelector:
         "weak": 3,  # log BF > 1.1
     }
 
-    def __init__(self):
-        """Initialize the model selector."""
+    # Threshold below which results are considered inconclusive
+    # This handles edge cases like L/h=50 where models are nearly equivalent
+    INCONCLUSIVE_LOG_BF_THRESHOLD = 0.5
+
+    def __init__(self, inconclusive_threshold: float = 0.5):
+        """
+        Initialize the model selector.
+
+        Args:
+            inconclusive_threshold: Log Bayes factor threshold below which
+                results are considered inconclusive (default 0.5, ~BF of 1.65)
+        """
         self.results_cache = {}
+        self.inconclusive_threshold = inconclusive_threshold
 
     def compare_models(
         self,
@@ -103,10 +124,10 @@ class BayesianModelSelector:
         ---------------------------------
         M1 (numerator)   = result1 (typically Euler-Bernoulli)
         M2 (denominator) = result2 (typically Timoshenko)
-        
+
         BF = P(Data | M1) / P(Data | M2)
         log_BF = log P(Data | M1) - log P(Data | M2)
-        
+
         Interpretation:
         - log_BF > 0  =>  Evidence FAVORS M1 (result1, typically EB)
         - log_BF < 0  =>  Evidence FAVORS M2 (result2, typically Timoshenko)
@@ -164,8 +185,15 @@ class BayesianModelSelector:
         if result1.loo is not None and result2.loo is not None:
             loo_diff = result1.loo - result2.loo
 
-        # Recommend model
-        recommended = result1.model_name if log_bf > 0 else result2.model_name
+        # Recommend model with inconclusive handling
+        # For very small log BF, the models are practically equivalent
+        if abs(log_bf) < self.inconclusive_threshold:
+            # When inconclusive, prefer simpler model (EB) for slender beams
+            # and conservative model (Timoshenko) for thick/unknown beams
+            # This is a practical engineering decision
+            recommended = result1.model_name  # Default to EB (simpler)
+        else:
+            recommended = result1.model_name if log_bf > 0 else result2.model_name
 
         return ModelComparisonResult(
             model1_name=result1.model_name,
@@ -201,6 +229,128 @@ class BayesianModelSelector:
         else:
             return ModelEvidence.STRONG_M1 if log_bf > 0 else ModelEvidence.STRONG_M2
 
+    def compute_occam_factor(
+        self,
+        model_name: str,
+        prior_params: Optional[Dict[str, Dict[str, float]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Compute the Occam factor (prior complexity penalty) for a model.
+
+        The Occam factor quantifies how much the prior penalizes model
+        complexity. A wider prior = larger Occam penalty.
+
+        For Bayesian model selection:
+        log P(D|M) ≈ log P(D|θ_MAP, M) - Occam_penalty
+
+        This helps diagnose if model selection is driven by prior
+        choices rather than data fit.
+
+        Args:
+            model_name: "Euler-Bernoulli" or "Timoshenko"
+            prior_params: Prior parameters (uses defaults if None)
+
+        Returns:
+            Dictionary with Occam factor analysis
+        """
+        if prior_params is None:
+            # Default prior parameters
+            prior_params = {
+                "elastic_modulus": {"sigma": 0.05},  # LogNormal
+                "sigma": {"sigma": 1e-6},  # HalfNormal
+                "poisson_ratio": {"sigma": 0.05},  # Normal (Timoshenko only)
+            }
+
+        # Compute approximate prior "volume" (log scale)
+        # For LogNormal(mu, sigma): effective range ≈ exp(mu) * exp(±3*sigma)
+        # For Normal(mu, sigma): effective range ≈ 6*sigma
+        # For HalfNormal(sigma): effective range ≈ 3*sigma
+
+        E_sigma = prior_params.get("elastic_modulus", {}).get("sigma", 0.05)
+        noise_sigma = prior_params.get("sigma", {}).get("sigma", 1e-6)
+
+        # Log prior volume contributions
+        log_vol_E = np.log(6 * E_sigma)  # Approximate log range for E
+        log_vol_sigma = np.log(3 * noise_sigma)  # HalfNormal
+
+        if model_name.lower() in ["timoshenko", "timo"]:
+            nu_sigma = prior_params.get("poisson_ratio", {}).get("sigma", 0.05)
+            log_vol_nu = np.log(6 * nu_sigma)  # Normal
+            total_log_vol = log_vol_E + log_vol_sigma + log_vol_nu
+            n_params = 3
+        else:
+            log_vol_nu = 0.0
+            total_log_vol = log_vol_E + log_vol_sigma
+            n_params = 2
+
+        return {
+            "model_name": model_name,
+            "n_parameters": n_params,
+            "log_prior_volume": total_log_vol,
+            "log_vol_E": log_vol_E,
+            "log_vol_sigma": log_vol_sigma,
+            "log_vol_nu": log_vol_nu if model_name.lower() in ["timoshenko", "timo"] else None,
+            "interpretation": (
+                f"{model_name} has {n_params} parameters. "
+                f"Prior volume penalty ≈ {-total_log_vol:.2f} nats."
+            ),
+        }
+
+    def diagnose_occam_asymmetry(
+        self,
+        prior_params: Optional[Dict[str, Dict[str, float]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Diagnose asymmetry in Occam penalty between models.
+
+        If the Occam penalty difference is large (>1 nat), model selection
+        may be prior-dominated rather than data-driven.
+
+        Args:
+            prior_params: Prior parameters (uses defaults if None)
+
+        Returns:
+            Diagnosis dictionary with recommendations
+        """
+        eb_occam = self.compute_occam_factor("Euler-Bernoulli", prior_params)
+        timo_occam = self.compute_occam_factor("Timoshenko", prior_params)
+
+        # Difference in Occam penalty (positive = EB favored by priors)
+        occam_diff = eb_occam["log_prior_volume"] - timo_occam["log_prior_volume"]
+
+        # Assess severity
+        if abs(occam_diff) < 0.5:
+            severity = "low"
+            message = "Prior complexity is well-balanced between models."
+        elif abs(occam_diff) < 1.5:
+            severity = "moderate"
+            favored = "Euler-Bernoulli" if occam_diff > 0 else "Timoshenko"
+            message = (
+                f"Moderate Occam asymmetry ({occam_diff:.2f} nats). "
+                f"{favored} is somewhat favored by priors."
+            )
+        else:
+            severity = "high"
+            favored = "Euler-Bernoulli" if occam_diff > 0 else "Timoshenko"
+            message = (
+                f"Large Occam asymmetry ({occam_diff:.2f} nats). "
+                f"Model selection may be prior-dominated, not data-driven. "
+                f"Consider widening {favored} priors."
+            )
+            warnings.warn(message, stacklevel=2)
+
+        return {
+            "eb_occam": eb_occam,
+            "timo_occam": timo_occam,
+            "occam_difference": occam_diff,
+            "severity": severity,
+            "message": message,
+            "recommendation": (
+                "Balance priors by adjusting sigma values" if severity != "low"
+                else "No action needed"
+            ),
+        }
+
     def analyze_aspect_ratio_study(
         self,
         eb_results: List[CalibrationResult],
@@ -229,7 +379,7 @@ class BayesianModelSelector:
         log_bfs = []
         recommendations = []
 
-        for i, L_h in enumerate(aspect_ratios):
+        for i, _L_h in enumerate(aspect_ratios):
             comp = self.compare_models(
                 eb_results[i],
                 timo_results[i],
@@ -331,8 +481,8 @@ class BayesianModelSelector:
             )
 
         # Slender beam guideline
-        min_L_h = min(aspect_ratios)
-        max_L_h = max(aspect_ratios)
+        min(aspect_ratios)
+        max(aspect_ratios)
 
         guidelines["slender_beams"] = (
             f"For L/h > {max(transition_point or 20, 15):.0f}: "

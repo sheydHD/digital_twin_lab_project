@@ -14,12 +14,13 @@ This is used to generate synthetic sensor data (displacements, strains) that wil
 be compared against analytical beam theory predictions.
 """
 
+from dataclasses import dataclass
+from typing import List, Optional, Tuple
+
 import numpy as np
-from dataclasses import dataclass, field
-from typing import Optional, Tuple, List
 from scipy import sparse
-from scipy.sparse.linalg import spsolve
 from scipy.interpolate import interp1d
+from scipy.sparse.linalg import spsolve
 
 
 @dataclass

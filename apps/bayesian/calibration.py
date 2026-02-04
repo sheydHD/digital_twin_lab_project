@@ -15,17 +15,47 @@ Reference:
 - PyMC documentation: https://www.pymc.io/
 """
 
+import logging
+import warnings
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+import arviz as az
 import numpy as np
 import pymc as pm
-import arviz as az
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Callable
-from abc import ABC, abstractmethod
 
-from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
+from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+
+logger = logging.getLogger(__name__)
+from apps.bayesian.normalization import (
+    NormalizationParams,
+    compute_normalization_params,
+)
+from apps.data.synthetic_generator import SyntheticDataset
 from apps.models.euler_bernoulli import EulerBernoulliBeam
 from apps.models.timoshenko import TimoshenkoBeam
-from apps.data.synthetic_generator import SyntheticDataset
+
+
+# Custom exceptions for convergence issues
+class ConvergenceError(Exception):
+    """
+    Raised when MCMC fails to converge.
+
+    This indicates that the posterior samples are unreliable and
+    any evidence calculations should not be trusted.
+    """
+    pass
+
+
+class ConvergenceWarning(UserWarning):
+    """
+    Warning for marginal MCMC convergence.
+
+    Raised when R-hat is elevated but not critically high,
+    indicating results may have 10-20% error.
+    """
+    pass
 
 
 @dataclass
@@ -52,22 +82,26 @@ class CalibrationResult:
     Attributes:
         model_name: Name of the calibrated model
         trace: PyMC InferenceData object with posterior samples
-        posterior_summary: Summary statistics for parameters
+        posterior_summary: Summary statistics for parameters (in PHYSICAL units)
         log_likelihood: Log-likelihood at posterior samples
         waic: Widely Applicable Information Criterion
         loo: Leave-One-Out cross-validation score
         marginal_likelihood_estimate: Estimated marginal likelihood
         convergence_diagnostics: R-hat and ESS statistics
+        normalization_params: Normalization scales used during fitting
+        posterior_summary_normalized: Summary statistics in normalized units
     """
 
     model_name: str
     trace: az.InferenceData
-    posterior_summary: Dict
+    posterior_summary: Dict  # Physical units
     log_likelihood: np.ndarray
     waic: Optional[float] = None
     loo: Optional[float] = None
     marginal_likelihood_estimate: Optional[float] = None
     convergence_diagnostics: Optional[Dict] = None
+    normalization_params: Optional[NormalizationParams] = None
+    posterior_summary_normalized: Optional[Dict] = None  # Normalized units
 
 
 class BayesianCalibrator(ABC):
@@ -108,6 +142,17 @@ class BayesianCalibrator(ABC):
 
         self._trace = None
         self._model = None
+        self._normalizer = None
+
+        # Convergence thresholds (can be overridden via config)
+        self.r_hat_reject = 1.05
+        self.r_hat_warn = 1.01
+        self.ess_min = 400
+
+        # Retry settings
+        self.retry_on_failure = True
+        self.max_retries = 2
+        self.samples_multiplier = 1.5
 
     @abstractmethod
     def _forward_model(
@@ -143,7 +188,17 @@ class BayesianCalibrator(ABC):
         data_type: str = "displacement",
     ) -> pm.Model:
         """
-        Build PyMC probabilistic model.
+        Build PyMC probabilistic model with automatic normalization.
+
+        Normalization Strategy:
+        ----------------------
+        All quantities are normalized to O(1) scale for stable MCMC:
+        - E_normalized ~ Normal(1.0, prior_sigma) → E = E_normalized * E_scale
+        - y_normalized = y_obs / disp_scale → predictions also normalized
+        - sigma_normalized = sigma / disp_scale → noise in normalized space
+
+        This prevents the 14+ orders of magnitude numerical issues that
+        cause WAIC instability and poor convergence.
 
         Args:
             data: Synthetic dataset with observations
@@ -163,12 +218,45 @@ class BayesianCalibrator(ABC):
             y_obs = data.strains
             sigma_obs = data.strain_noise_std
 
+        # Compute normalization parameters
+        self._normalizer = compute_normalization_params(
+            displacements=y_obs,
+            E_nominal=data.material.elastic_modulus,
+        )
+
+        # Normalize the observations
+        y_obs_norm = y_obs / self._normalizer.displacement_scale
+        sigma_obs_norm = sigma_obs / self._normalizer.displacement_scale
+
+        logger.debug(
+            f"Normalization active: disp_scale={self._normalizer.displacement_scale:.2e}, "
+            f"E_scale={self._normalizer.E_scale:.2e}"
+        )
+
         with pm.Model() as model:
-            # Define priors for each parameter
+            # Store normalization params in model for later retrieval
+            model.normalization = self._normalizer
+
+            # Define priors for each parameter (in NORMALIZED space)
             params = {}
 
             for name, prior in self.priors.items():
-                if prior.distribution == "normal":
+                if name == "elastic_modulus":
+                    # E_normalized ~ Normal(1.0, sigma) instead of LogNormal(ln(210e9), sigma)
+                    # This makes E centered at 1.0 with the same relative uncertainty
+                    params[name] = pm.Normal(
+                        name,
+                        mu=1.0,  # Centered at normalized scale
+                        sigma=prior.params.get("sigma", 0.05),  # Same relative uncertainty
+                    )
+                elif name == "sigma":
+                    # Observation noise in normalized space
+                    # HalfNormal centered at normalized scale
+                    params[name] = pm.HalfNormal(
+                        name,
+                        sigma=1.0,  # O(1) scale for normalized space
+                    )
+                elif prior.distribution == "normal":
                     params[name] = pm.Normal(
                         name,
                         mu=prior.params["mu"],
@@ -192,29 +280,27 @@ class BayesianCalibrator(ABC):
                         sigma=prior.params["sigma"],
                     )
 
-            # Observation noise (can be inferred or fixed)
-            if "sigma" in self.priors:
+            # Observation noise (in normalized space)
+            if "sigma" in params:
                 sigma = params["sigma"]
             else:
-                # Fixed observation noise
-                sigma = sigma_obs
+                # Fixed observation noise (normalized)
+                sigma = sigma_obs_norm
 
-            # For now, use pm.Deterministic with custom forward model
-            # This is a placeholder - actual implementation needs PyTensor ops
-
-            # Forward model prediction
-            # Note: This approach is simplified. For production, use pytensor.
+            # Forward model prediction (in normalized space)
             y_pred = pm.Deterministic(
                 "y_pred",
-                self._pytensor_forward(params, x_obs, data.geometry, data.load_case),
+                self._pytensor_forward_normalized(
+                    params, x_obs, data.geometry, data.load_case, self._normalizer
+                ),
             )
 
-            # Likelihood
-            likelihood = pm.Normal(
+            # Likelihood (all in normalized space now!)
+            pm.Normal(
                 "y_obs",
                 mu=y_pred,
                 sigma=sigma,
-                observed=y_obs,
+                observed=y_obs_norm,
             )
 
         return model
@@ -252,6 +338,61 @@ class BayesianCalibrator(ABC):
         w = (P * x_t**2 / (6 * EI)) * (3 * L - x_t)
 
         return w
+
+    def _pytensor_forward_normalized(
+        self,
+        params: Dict,
+        x: np.ndarray,
+        geometry: BeamGeometry,
+        load: LoadCase,
+        normalizer: NormalizationParams,
+    ):
+        """
+        PyTensor forward model operating in normalized space.
+
+        This is the key to stable MCMC: all quantities are O(1).
+
+        Physics (in normalized space):
+        - E_physical = E_normalized * E_scale
+        - w_physical = f(E_physical, geometry, load)
+        - w_normalized = w_physical / displacement_scale
+
+        Since both E and w scale proportionally (w ∝ 1/E), we have:
+        w_normalized = w_physical / disp_scale
+                     = f(E_norm * E_scale, ...) / disp_scale
+
+        Args:
+            params: Dictionary with normalized parameters (E~1.0)
+            x: Measurement locations [m]
+            geometry: Beam geometry
+            load: Load case
+            normalizer: Normalization parameters
+
+        Returns:
+            Normalized deflection predictions (O(1) scale)
+        """
+        import pytensor.tensor as pt
+
+        L = geometry.length
+        I = geometry.moment_of_inertia
+        P = load.point_load
+
+        # Get NORMALIZED elastic modulus (E_norm ~ 1.0)
+        E_norm = params.get("elastic_modulus", 1.0)
+
+        # Convert to physical E for computation
+        E_physical = E_norm * normalizer.E_scale
+
+        x_t = pt.as_tensor_variable(x)
+
+        # Compute physical deflection (this is the base class default - EB)
+        EI = E_physical * I
+        w_physical = -(P * x_t**2 / (6 * EI)) * (3 * L - x_t)
+
+        # Normalize the output
+        w_normalized = w_physical / normalizer.displacement_scale
+
+        return w_normalized
 
     def calibrate(
         self,
@@ -300,9 +441,14 @@ class BayesianCalibrator(ABC):
             # Compute log-likelihood for model comparison
             pm.compute_log_likelihood(self._trace)
 
-        # Extract results
-        posterior_summary = az.summary(self._trace).to_dict()
+        # Extract results (in normalized space)
+        posterior_summary_norm = az.summary(self._trace).to_dict()
         log_lik = self._trace.log_likelihood["y_obs"].values
+
+        # Denormalize posterior summary to physical units
+        posterior_summary = self._denormalize_posterior_summary(
+            posterior_summary_norm, self._normalizer
+        )
 
         # Compute model comparison criteria
         waic_result = az.waic(self._trace)
@@ -317,36 +463,151 @@ class BayesianCalibrator(ABC):
             "ess_bulk": {k: float(v.values) for k, v in ess.items() if k != "y_pred"},
         }
 
+        # Validate convergence
+        convergence = self._validate_convergence(self._trace, convergence)
+
         return CalibrationResult(
             model_name=self.model_name,
             trace=self._trace,
-            posterior_summary=posterior_summary,
+            posterior_summary=posterior_summary,  # Physical units
             log_likelihood=log_lik,
             waic=float(waic_result.elpd_waic),  # ArviZ returns ELPDData object
             loo=float(loo_result.elpd_loo),      # Access elpd_loo attribute
             convergence_diagnostics=convergence,
+            normalization_params=self._normalizer,
+            posterior_summary_normalized=posterior_summary_norm,
         )
+
+    def _denormalize_posterior_summary(
+        self,
+        summary_norm: Dict,
+        normalizer: NormalizationParams,
+    ) -> Dict:
+        """
+        Convert posterior summary from normalized to physical units.
+
+        E_physical = E_normalized * E_scale
+        sigma_physical = sigma_normalized * displacement_scale
+
+        Args:
+            summary_norm: Summary dict from az.summary() in normalized space
+            normalizer: Normalization parameters
+
+        Returns:
+            Summary dict with values in physical units
+        """
+        import copy
+        summary = copy.deepcopy(summary_norm)
+
+        # Scale elastic modulus
+        if "elastic_modulus" in summary.get("mean", {}):
+            for stat in ["mean", "sd", "hdi_3%", "hdi_97%"]:
+                if stat in summary and "elastic_modulus" in summary[stat]:
+                    summary[stat]["elastic_modulus"] *= normalizer.E_scale
+
+        # Scale observation noise
+        if "sigma" in summary.get("mean", {}):
+            for stat in ["mean", "sd", "hdi_3%", "hdi_97%"]:
+                if stat in summary and "sigma" in summary[stat]:
+                    summary[stat]["sigma"] *= normalizer.displacement_scale
+
+        # Note: poisson_ratio is already O(1), no scaling needed
+
+        return summary
+
+    def _validate_convergence(
+        self,
+        trace: az.InferenceData,
+        convergence: Dict[str, Any],
+        strict: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Validate MCMC convergence and add diagnostics.
+
+        Checks R-hat and ESS values against thresholds and either
+        raises errors/warnings or adds diagnostic information.
+
+        Args:
+            trace: ArviZ InferenceData with posterior samples
+            convergence: Existing convergence dictionary to update
+            strict: If True, raise ConvergenceError for poor convergence
+
+        Returns:
+            Updated convergence dictionary with validation results
+
+        Raises:
+            ConvergenceError: If R-hat > r_hat_reject and strict=True
+        """
+        # Get maximum R-hat across all parameters
+        r_hat_values = list(convergence["rhat"].values())
+        ess_values = list(convergence["ess_bulk"].values())
+
+        r_hat_max = max(r_hat_values) if r_hat_values else 1.0
+        ess_min = min(ess_values) if ess_values else 0
+
+        # Add summary statistics
+        convergence["r_hat_max"] = r_hat_max
+        convergence["ess_min"] = ess_min
+        convergence["converged"] = True
+        convergence["warnings"] = []
+
+        # Check R-hat - hard reject threshold
+        if r_hat_max > self.r_hat_reject:
+            convergence["converged"] = False
+            msg = (
+                f"MCMC failed to converge: R-hat = {r_hat_max:.4f} > {self.r_hat_reject}. "
+                "Evidence values are unreliable. Consider increasing n_samples or n_tune."
+            )
+            convergence["warnings"].append(msg)
+            logger.warning(msg)
+
+            if strict:
+                raise ConvergenceError(msg)
+
+        # Check R-hat - warning threshold
+        elif r_hat_max > self.r_hat_warn:
+            msg = (
+                f"Marginal convergence: R-hat = {r_hat_max:.4f} > {self.r_hat_warn}. "
+                "Evidence may have ~10-20% error. Consider increasing samples."
+            )
+            convergence["warnings"].append(msg)
+            warnings.warn(msg, ConvergenceWarning, stacklevel=2)
+
+        # Check ESS
+        if ess_min < self.ess_min:
+            msg = (
+                f"Low effective sample size: ESS = {ess_min:.0f} < {self.ess_min}. "
+                "WAIC/LOO estimates may be unstable."
+            )
+            convergence["warnings"].append(msg)
+            warnings.warn(msg, ConvergenceWarning, stacklevel=2)
+
+        return convergence
 
     def _get_initial_values(self, data: SyntheticDataset) -> Dict:
         """
         Compute good initial values for MCMC to prevent stalling.
-        
+
         Starting from reasonable values helps the sampler avoid
         getting stuck in low-probability regions during tuning.
+
+        Note: Since we work in normalized space, E should start at ~1.0
+        (which maps to the nominal E_scale = material.elastic_modulus).
         """
         initvals = {
-            # Start E at true value (or close to it)
-            "elastic_modulus": data.material.elastic_modulus,
+            # Start E_normalized at 1.0 (the normalized true value)
+            "elastic_modulus": 1.0,
         }
-        
-        # Add Poisson ratio for Timoshenko
+
+        # Add Poisson ratio for Timoshenko (already O(1), no change needed)
         if "poisson_ratio" in self.priors:
             initvals["poisson_ratio"] = data.material.poisson_ratio
-        
-        # Observation noise - start at a reasonable small value
+
+        # Observation noise in normalized space - start at O(1)
+        # Since noise is also normalized by displacement_scale
         if "sigma" in self.priors:
-            initvals["sigma"] = 1e-7  # Small observation noise
-            
+            initvals["sigma"] = 0.1  # O(1) normalized noise
+
         return initvals
 
     def compute_marginal_likelihood(
@@ -379,17 +640,17 @@ class BayesianCalibrator(ABC):
         if method == "harmonic_mean":
             # Harmonic mean estimator (Newton & Raftery, 1994)
             # log p(y|M) ≈ -log(mean(exp(-log_lik)))
-            # 
+            #
             # Numerically stable version using log-sum-exp trick:
             # log(mean(exp(-log_lik))) = log(sum(exp(-log_lik))) - log(n)
             #                          = logsumexp(-log_lik) - log(n)
             from scipy.special import logsumexp
-            
+
             neg_log_lik = -log_lik
             n = len(neg_log_lik)
             log_mean_exp = logsumexp(neg_log_lik) - np.log(n)
             log_ml = -log_mean_exp
-            
+
             return log_ml
 
         elif method == "bridge_sampling":
@@ -497,6 +758,41 @@ class EulerBernoulliCalibrator(BayesianCalibrator):
 
         return w
 
+    def _pytensor_forward_normalized(
+        self,
+        params: Dict,
+        x: np.ndarray,
+        geometry: BeamGeometry,
+        load: LoadCase,
+        normalizer: NormalizationParams,
+    ):
+        """
+        Normalized PyTensor forward model for Euler-Bernoulli beam.
+
+        All computations done with E_normalized ~ 1.0 and output
+        is normalized displacement ~ O(1).
+        """
+        import pytensor.tensor as pt
+
+        L = geometry.length
+        I = geometry.moment_of_inertia
+        P = load.point_load
+
+        # Get normalized E (should be ~1.0) and convert to physical
+        E_norm = params.get("elastic_modulus", 1.0)
+        E_physical = E_norm * normalizer.E_scale
+
+        x_t = pt.as_tensor_variable(x)
+
+        # Compute physical deflection (Euler-Bernoulli bending only)
+        EI = E_physical * I
+        w_physical = -(P * x_t**2 / (6 * EI)) * (3 * L - x_t)
+
+        # Normalize the output to O(1)
+        w_normalized = w_physical / normalizer.displacement_scale
+
+        return w_normalized
+
 
 class TimoshenkoCalibrator(BayesianCalibrator):
     """
@@ -545,7 +841,7 @@ class TimoshenkoCalibrator(BayesianCalibrator):
         Deflection formula for cantilever with tip load:
         w(x) = w_bending(x) + w_shear(x)
              = (P * x^2 / (6*E*I)) * (3*L - x) + (P * x) / (kappa * G * A)
-        
+
         where G = E / (2*(1+nu))
         """
         import pytensor.tensor as pt
@@ -571,18 +867,64 @@ class TimoshenkoCalibrator(BayesianCalibrator):
 
         return w_bending + w_shear
 
+    def _pytensor_forward_normalized(
+        self,
+        params: Dict,
+        x: np.ndarray,
+        geometry: BeamGeometry,
+        load: LoadCase,
+        normalizer: NormalizationParams,
+    ):
+        """
+        Normalized PyTensor forward model for Timoshenko beam.
+
+        Includes both bending and shear deformation, all with
+        normalized E ~ 1.0 and output ~ O(1).
+        """
+        import pytensor.tensor as pt
+
+        L = geometry.length
+        I = geometry.moment_of_inertia
+        A = geometry.area
+        P = load.point_load
+        kappa = 5.0 / 6.0  # Shear correction factor for rectangular section
+
+        # Get normalized E (should be ~1.0) and convert to physical
+        E_norm = params.get("elastic_modulus", 1.0)
+        E_physical = E_norm * normalizer.E_scale
+
+        # Poisson's ratio stays as-is (already O(1))
+        nu = params.get("poisson_ratio", 0.3)
+
+        x_t = pt.as_tensor_variable(x)
+
+        # Bending contribution
+        EI = E_physical * I
+        w_bending = -(P * x_t**2 / (6 * EI)) * (3 * L - x_t)
+
+        # Shear contribution
+        G = E_physical / (2 * (1 + nu))
+        w_shear = -(P * x_t) / (kappa * G * A)
+
+        w_physical = w_bending + w_shear
+
+        # Normalize the output to O(1)
+        w_normalized = w_physical / normalizer.displacement_scale
+
+        return w_normalized
+
 
 def create_default_priors() -> List[PriorConfig]:
     """
     Create default prior configurations for beam calibration.
-    
+
     IMPORTANT: Prior Selection Rationale
     ------------------------------------
     1. Elastic Modulus (E):
        - Steel: E ≈ 200-220 GPa, we use LogNormal centered at 210 GPa
        - sigma=0.05 gives ~5% uncertainty (tighter than before to avoid divergences)
        - LogNormal ensures E > 0 and is scale-appropriate for Pa
-    
+
     2. Observation Noise (sigma):
        - HalfNormal with small sigma for tight constraint
        - Typical displacement measurements: ~1e-6 m precision
@@ -614,7 +956,7 @@ def create_timoshenko_priors() -> List[PriorConfig]:
 
     Includes additional parameter for Poisson's ratio which determines
     shear modulus via G = E / (2*(1+nu)).
-    
+
     Note: Timoshenko has one more parameter than Euler-Bernoulli,
     so WAIC/LOO will penalize this extra complexity via the effective
     number of parameters term.
@@ -631,4 +973,76 @@ def create_timoshenko_priors() -> List[PriorConfig]:
             },
         )
     )
+    return priors
+
+
+def create_geometric_priors(
+    true_height: float,
+    height_uncertainty: float = 0.02,
+) -> List[PriorConfig]:
+    """
+    Create priors including geometric parameter (height) calibration.
+
+    This allows the model to learn geometric parameters from data,
+    which is useful when geometry is uncertain (e.g., corrosion, damage).
+
+    Args:
+        true_height: Nominal beam height [m]
+        height_uncertainty: Relative uncertainty in height (default 2%)
+
+    Returns:
+        List of PriorConfig objects including height prior
+    """
+    priors = create_default_priors()
+    priors.append(
+        PriorConfig(
+            param_name="height_factor",
+            distribution="normal",
+            params={
+                "mu": 1.0,  # Factor multiplying nominal height
+                "sigma": height_uncertainty,  # 2% uncertainty
+            },
+        )
+    )
+    return priors
+
+
+def create_full_priors(
+    true_height: float,
+    include_poisson: bool = True,
+    include_geometry: bool = False,
+    height_uncertainty: float = 0.02,
+) -> List[PriorConfig]:
+    """
+    Create comprehensive priors for full calibration.
+
+    Args:
+        true_height: Nominal beam height [m]
+        include_poisson: Include Poisson ratio (for Timoshenko)
+        include_geometry: Include geometric parameters
+        height_uncertainty: Relative uncertainty in height
+
+    Returns:
+        List of PriorConfig objects
+    """
+    priors = create_default_priors()
+
+    if include_poisson:
+        priors.append(
+            PriorConfig(
+                param_name="poisson_ratio",
+                distribution="normal",
+                params={"mu": 0.3, "sigma": 0.03},
+            )
+        )
+
+    if include_geometry:
+        priors.append(
+            PriorConfig(
+                param_name="height_factor",
+                distribution="normal",
+                params={"mu": 1.0, "sigma": height_uncertainty},
+            )
+        )
+
     return priors

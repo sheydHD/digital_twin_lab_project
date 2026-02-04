@@ -10,15 +10,14 @@ The synthetic data serves as "ground truth" observations for:
 - Validating Bayesian inference procedures
 """
 
-import numpy as np
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, Dict
 from pathlib import Path
-import json
-import h5py
+from typing import Dict, List, Optional, Tuple
 
-from apps.fem.cantilever_fem import CantileverFEM
-from apps.models.base_beam import BeamGeometry, MaterialProperties, LoadCase
+import h5py
+import numpy as np
+
+from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
 
 
 @dataclass
@@ -133,18 +132,18 @@ class SyntheticDataGenerator:
     def _get_n_beam_elements(self, geometry: BeamGeometry) -> int:
         """
         Get number of 1D beam elements based on aspect ratio.
-        
+
         For 1D Timoshenko beam elements, we need enough elements
         to capture the deflection shape accurately.
         """
         aspect_ratio = geometry.aspect_ratio
-        
+
         # Use ~4 elements per unit aspect ratio, minimum 20
         n_elem = max(20, int(4 * aspect_ratio))
-        
+
         # Cap to prevent excessive computation (not really needed for 1D)
         n_elem = min(n_elem, 200)
-        
+
         return n_elem
 
     def generate_static_dataset(
@@ -155,16 +154,16 @@ class SyntheticDataGenerator:
     ) -> SyntheticDataset:
         """
         Generate synthetic static measurement data using 1D Timoshenko beam FEM.
-        
+
         IMPORTANT - Ground Truth Physics:
         ---------------------------------
         Uses 1D Timoshenko beam finite elements which exactly capture:
         - Bending deformation (same as Euler-Bernoulli)
         - Shear deformation (via shear correction factor κ)
-        
+
         This ensures the ground truth is physically consistent with beam theory,
         avoiding the 2D plane stress vs 1D beam theory mismatch issues.
-        
+
         Expected model selection behavior:
         - Thick beams (L/h < 10): Significant shear -> Timoshenko fits better
         - Slender beams (L/h > 20): Shear negligible -> EB preferred (simpler)
@@ -178,10 +177,10 @@ class SyntheticDataGenerator:
             SyntheticDataset with measurements
         """
         from apps.fem.beam_fem import TimoshenkoBeamFEM
-        
+
         # Get number of beam elements
         n_elem = self._get_n_beam_elements(geometry)
-        
+
         # Create 1D Timoshenko beam FEM (includes shear deformation exactly)
         fem = TimoshenkoBeamFEM(
             length=geometry.length,
@@ -216,7 +215,7 @@ class SyntheticDataGenerator:
         P = load.point_load
         L = geometry.length
         y_surface = geometry.height / 2
-        
+
         x_strain = self.sensors.strain_locations
         M_x = P * (L - x_strain)  # Moment at strain gauge locations
         eps_sensors = -y_surface * M_x / (E * I)  # Axial strain at top surface

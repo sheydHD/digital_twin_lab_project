@@ -15,6 +15,9 @@ beam_parameters:
     - 20   # Moderately slender
     - 30   # Slender beam - EB expected
     - 50   # Very slender beam
+    - 60   
+    - 70   
+    - 100  
 
 # Material properties (Structural Steel)
 material:
@@ -47,27 +50,53 @@ fem:
 
 # Bayesian inference settings
 bayesian:
-  n_samples: 800      # MCMC samples per chain (reduced for faster runs)
-  n_tune: 400         # Tuning/warmup samples (reduced)
-  n_chains: 2         # Number of chains (reduced to speed up)
-  target_accept: 0.95 # Target acceptance rate for NUTS (increased for stability)
+  n_samples: 1500     # MCMC samples per chain (increased for stability)
+  n_tune: 800         # Tuning/warmup samples (increased for better adaptation)
+  n_chains: 4         # Number of chains (increased for reliable R-hat)
+  target_accept: 0.95 # Target acceptance rate for NUTS
   random_seed: 42     # Random seed for reproducibility
+  
+  # Data normalization settings (NEW)
+  # Normalizes quantities to O(1) for numerical stability
+  normalization:
+    enabled: true           # Enable data normalization for stable MCMC
+    method: "max_abs"       # Method: "max_abs", "std", or "range"
+  
+  # Evidence estimation method (NEW)
+  # "waic" = fast but approximate, "bridge" = accurate but slower
+  evidence_method: "waic"
+
+# Convergence diagnostics settings (NEW)
+# These thresholds determine when MCMC results are acceptable
+convergence:
+  # R-hat thresholds (Gelman-Rubin statistic)
+  r_hat_reject: 1.05        # Hard reject: chains definitely not mixed
+  r_hat_warn: 1.01          # Warning: marginal convergence
+  
+  # Effective sample size thresholds
+  ess_bulk_min: 400         # Minimum bulk ESS for reliable estimates
+  ess_tail_min: 200         # Minimum tail ESS for quantiles
+  
+  # Retry behavior for failed convergence
+  retry_on_failure: true    # Auto-retry with more samples
+  max_retries: 2            # Maximum retry attempts
+  samples_multiplier: 1.5   # Multiply samples on each retry
 
 # Prior distributions for calibration
-# NOTE: These are now tighter to prevent overflow and divergences
+# NOTE: Carefully tuned for balanced Occam's razor penalty
 priors:
   elastic_modulus:
     distribution: lognormal
     # Log-normal prior centered at 210 GPa with ~5% uncertainty
     mu: 26.07  # ln(210e9) ≈ 26.07
-    sigma: 0.05  # Tighter prior (was 0.1)
+    sigma: 0.05
   poisson_ratio:
-    distribution: normal  # Changed from uniform for better sampling
+    distribution: normal
     mu: 0.3
-    sigma: 0.03  # Tight prior around steel value
+    sigma: 0.05  # Widened from 0.03 to reduce Occam asymmetry
   observation_noise:
     distribution: halfnormal
-    sigma: 1.0e-6  # Tighter (was 1e-5)
+    sigma: 1.0e-6
 
 # Model selection thresholds (following Kass & Raftery, 1995)
 model_selection:
@@ -75,6 +104,21 @@ model_selection:
   weak_evidence: 3      # BF > 3: Weak evidence
   moderate_evidence: 10 # BF > 10: Moderate evidence
   strong_evidence: 100  # BF > 100: Strong evidence
+  # Threshold below which results are considered inconclusive
+  # This handles edge cases (e.g., L/h=50) where models are nearly equivalent
+  inconclusive_threshold: 0.5  # |log BF| < 0.5 is inconclusive
+
+# Hyperparameter optimization settings (Optuna)
+optimization:
+  enabled: false         # Set to true to run optimization
+  n_trials: 30           # Number of optimization trials
+  timeout: 3600          # Maximum optimization time (seconds)
+  fast_mode: true        # Use subset of datasets for faster optimization
+
+# Frequency analysis settings
+frequency_analysis:
+  enabled: true          # Enable frequency-based model selection analysis
+  n_modes: 5             # Number of vibration modes to analyze
 
 # Output settings
 output_dir: "outputs"

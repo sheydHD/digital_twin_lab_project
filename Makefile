@@ -125,6 +125,22 @@ format-check: check-env
 	$(VENV_PYTHON) -m isort --check-only apps/ tests/ main.py
 
 # ==============================================================================
+# DETAILED ANALYSIS (for presentations/meetings)
+# ==============================================================================
+
+# Generate detailed analysis figures
+figures: check-env
+	@echo "Generating detailed analysis figures..."
+	$(VENV_PYTHON) examples/detailed_analysis.py
+	$(VENV_PYTHON) examples/parameter_analysis.py
+	@echo "Figures saved to outputs/figures/detailed/"
+
+# Quick demo with visualizations
+demo: check-env
+	@echo "Running quick demo..."
+	$(VENV_PYTHON) examples/quick_demo.py
+
+# ==============================================================================
 # DOCUMENTATION
 # ==============================================================================
 

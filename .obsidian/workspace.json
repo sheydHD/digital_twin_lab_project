@@ -11,14 +11,10 @@
             "id": "a5f3ea1e44cf441b",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "README.md",
-                "mode": "preview",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "README"
+              "title": "New tab"
             }
           }
         ]
@@ -185,12 +181,32 @@
   },
   "active": "a5f3ea1e44cf441b",
   "lastOpenFiles": [
-    "pytest-cache-files-nkta9tkd",
-    "tests/__pycache__/test_fem.cpython-312-pytest-9.0.2.pyc",
-    "tests/__pycache__/test_beam_models.cpython-312-pytest-9.0.2.pyc",
-    "tests/__pycache__/__init__.cpython-312.pyc",
-    "tests/__pycache__",
-    "apps/data/sediUDpiT",
+    "tests/__pycache__/test_normalization.cpython-312-pytest-9.0.2.pyc",
+    "tests/__pycache__/test_bayesian.cpython-312-pytest-9.0.2.pyc",
+    "tests/test_normalization.py",
+    "tests/test_bayesian.py",
+    "docs/IMPLEMENTATION_PLAN.md",
+    "docs/internal/BAYESIAN_AUDIT_ANALYSIS.md",
+    "docs/internal/IMPLEMENTATION_PLAN.md",
+    "docs/internal",
+    "apps/bayesian/__pycache__/hyperparameter_optimization.cpython-312.pyc.125791560025072",
+    "outputs/figures/detailed/methodology_flowchart.png",
+    "outputs/figures/detailed/convergence_diagnostics.png",
+    "outputs/figures/detailed/parameter_recovery_analysis.png",
+    "examples/parameter_analysis.py",
+    "outputs/figures/detailed/jeffreys_scale_diagram.png",
+    "outputs/figures/detailed/data_fit_comparison.png",
+    "outputs/figures/detailed/comprehensive_dashboard.png",
+    "outputs/figures/detailed/frequency_mode_analysis.png",
+    "outputs/figures/detailed/transition_analysis.png",
+    "outputs/figures/detailed/deflection_profiles_grid.png",
+    "outputs/figures/detailed/evidence_strength_bars.png",
+    "outputs/figures/detailed",
+    "examples/detailed_analysis.py",
+    "apps/bayesian/__pycache__/bridge_sampling.cpython-312.pyc",
+    "apps/bayesian/__pycache__/normalization.cpython-312.pyc",
+    "docs/BAYESIAN_AUDIT_ANALYSIS.md",
+    "README.md",
     "EXPLANATION.md"
   ]
 }
