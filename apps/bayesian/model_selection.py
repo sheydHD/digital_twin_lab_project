@@ -538,7 +538,7 @@ def compute_bayes_factor_direct(
     # log p(y|M) ≈ -log(mean(exp(-log_lik)))
 
     # Use log-sum-exp trick for numerical stability
-    def log_marginal_harmonic(log_lik):
+    def log_marginal_harmonic(log_lik: np.ndarray) -> float:
         n = len(log_lik)
         return -np.log(n) + np.log(np.sum(np.exp(-log_lik - np.max(-log_lik)))) + np.max(-log_lik)
 

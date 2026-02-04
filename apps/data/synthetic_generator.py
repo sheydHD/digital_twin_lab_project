@@ -367,7 +367,7 @@ class SyntheticDataGenerator:
 
         raise NotImplementedError(
             "Dynamic data generation not yet implemented. "
-            "TODO: Task 13 - Implement frequency-domain analysis"
+            "See GitHub issue #13 for frequency-domain analysis implementation."
         )
 
 

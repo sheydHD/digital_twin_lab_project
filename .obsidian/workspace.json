@@ -181,6 +181,7 @@
   },
   "active": "a5f3ea1e44cf441b",
   "lastOpenFiles": [
+    "apps/py.typed",
     "tests/__pycache__/test_normalization.cpython-312-pytest-9.0.2.pyc",
     "tests/__pycache__/test_bayesian.cpython-312-pytest-9.0.2.pyc",
     "tests/test_normalization.py",
@@ -204,7 +205,6 @@
     "outputs/figures/detailed",
     "examples/detailed_analysis.py",
     "apps/bayesian/__pycache__/bridge_sampling.cpython-312.pyc",
-    "apps/bayesian/__pycache__/normalization.cpython-312.pyc",
     "docs/BAYESIAN_AUDIT_ANALYSIS.md",
     "README.md",
     "EXPLANATION.md"
