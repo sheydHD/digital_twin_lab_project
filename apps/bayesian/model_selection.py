@@ -383,7 +383,7 @@ class BayesianModelSelector:
             comp = self.compare_models(
                 eb_results[i],
                 timo_results[i],
-                use_marginal_likelihood=False,  # Use WAIC for robustness
+                use_marginal_likelihood=True,  # Use bridge sampling marginal likelihoods
             )
             comparisons.append(comp)
             log_bfs.append(comp.log_bayes_factor)

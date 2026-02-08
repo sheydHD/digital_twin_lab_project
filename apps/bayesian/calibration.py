@@ -19,7 +19,7 @@ import logging
 import warnings
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import arviz as az
 import numpy as np
@@ -143,6 +143,8 @@ class BayesianCalibrator(ABC):
         self._trace = None
         self._model = None
         self._normalizer = None
+        self._calibration_data = None
+        self._calibration_data_type = None
 
         # Convergence thresholds (can be overridden via config)
         self.r_hat_reject = 1.05
@@ -213,10 +215,12 @@ class BayesianCalibrator(ABC):
             x_obs = data.x_disp
             y_obs = data.displacements
             sigma_obs = data.displacement_noise_std
-        else:
+        elif data_type == "strain":
             x_obs = data.x_strain
             y_obs = data.strains
             sigma_obs = data.strain_noise_std
+        else:
+            raise ValueError(f"Unknown data_type: {data_type}. Use 'displacement' or 'strain'.")
 
         # Compute normalization parameters
         self._normalizer = compute_normalization_params(
@@ -288,12 +292,20 @@ class BayesianCalibrator(ABC):
                 sigma = sigma_obs_norm
 
             # Forward model prediction (in normalized space)
-            y_pred = pm.Deterministic(
-                "y_pred",
-                self._pytensor_forward_normalized(
-                    params, x_obs, data.geometry, data.load_case, self._normalizer
-                ),
-            )
+            if data_type == "strain":
+                y_pred = pm.Deterministic(
+                    "y_pred",
+                    self._pytensor_strain_forward_normalized(
+                        params, x_obs, data.geometry, data.load_case, self._normalizer
+                    ),
+                )
+            else:
+                y_pred = pm.Deterministic(
+                    "y_pred",
+                    self._pytensor_forward_normalized(
+                        params, x_obs, data.geometry, data.load_case, self._normalizer
+                    ),
+                )
 
             # Likelihood (all in normalized space now!)
             pm.Normal(
@@ -394,6 +406,55 @@ class BayesianCalibrator(ABC):
 
         return w_normalized
 
+    def _pytensor_strain_forward_normalized(
+        self,
+        params: Dict,
+        x: np.ndarray,
+        geometry: BeamGeometry,
+        load: LoadCase,
+        normalizer: NormalizationParams,
+    ):
+        """
+        PyTensor forward model for strain in normalized space.
+
+        Strain at top surface: ε(x) = -y_surface * M(x) / (EI)
+        For cantilever with point load: M(x) = P*(L-x)
+        So: ε(x) = -(h/2) * P * (L-x) / (EI)
+
+        Args:
+            params: Dictionary with normalized parameters (E~1.0)
+            x: Strain gauge locations [m]
+            geometry: Beam geometry
+            load: Load case
+            normalizer: Normalization parameters
+
+        Returns:
+            Normalized strain predictions (O(1) scale)
+        """
+        import pytensor.tensor as pt
+
+        L = geometry.length
+        I = geometry.moment_of_inertia
+        P = load.point_load
+        y_surface = geometry.height / 2
+
+        E_norm = params.get("elastic_modulus", 1.0)
+        E_physical = E_norm * normalizer.E_scale
+
+        x_t = pt.as_tensor_variable(x)
+
+        # Bending moment: M(x) = P*(L-x)
+        M_x = P * (L - x_t)
+
+        # Strain at top surface: ε = -y * M / (EI)
+        EI = E_physical * I
+        strain_physical = -y_surface * M_x / EI
+
+        # Normalize
+        strain_normalized = strain_physical / normalizer.displacement_scale
+
+        return strain_normalized
+
     def calibrate(
         self,
         data: SyntheticDataset,
@@ -415,6 +476,10 @@ class BayesianCalibrator(ABC):
         print(f"\n{'='*60}")
         print(f"Calibrating {self.model_name} model")
         print(f"{'='*60}")
+
+        # Store dataset reference for bridge sampling
+        self._calibration_data = data
+        self._calibration_data_type = data_type
 
         # Build model
         self._model = self._build_pymc_model(data, data_type)
@@ -654,13 +719,147 @@ class BayesianCalibrator(ABC):
             return log_ml
 
         elif method == "bridge_sampling":
-            raise NotImplementedError("Bridge sampling not yet implemented")
+            from apps.bayesian.bridge_sampling import BridgeSampler
+
+            log_lik_func = self._build_log_likelihood_func()
+            log_prior_func = self._build_log_prior_func()
+            param_names = self._get_param_names()
+
+            sampler = BridgeSampler(
+                trace=self._trace,
+                log_likelihood_func=log_lik_func,
+                log_prior_func=log_prior_func,
+                param_names=param_names,
+                n_bridge_samples=5000,
+                tol=1e-8,
+                max_iter=500,
+            )
+            result = sampler.estimate()
+
+            if not result.converged:
+                logger.warning(
+                    f"Bridge sampling did not converge for {self.model_name}. "
+                    f"SE={result.standard_error:.4f}. Falling back to harmonic mean."
+                )
+                return self.compute_marginal_likelihood(method="harmonic_mean")
+
+            logger.info(
+                f"Bridge sampling for {self.model_name}: "
+                f"log_ML={result.log_marginal_likelihood:.4f} "
+                f"± {result.standard_error:.4f}"
+            )
+            return result.log_marginal_likelihood
 
         elif method == "smc":
             raise NotImplementedError("SMC estimation not yet implemented")
 
         else:
             raise ValueError(f"Unknown method: {method}")
+
+    def _get_param_names(self) -> List[str]:
+        """Get parameter names used in MCMC (excluding derived quantities)."""
+        var_names = list(self._trace.posterior.data_vars)
+        return [v for v in var_names if v not in ["y_pred", "y_obs"] and not v.startswith("_")]
+
+    def _build_log_likelihood_func(self) -> Callable:
+        """
+        Build a NumPy log-likelihood callable for bridge sampling.
+
+        Returns a function that takes a 1D parameter array and returns
+        the total log-likelihood log p(y|θ) in normalized space.
+        """
+        data = self._calibration_data
+        normalizer = self._normalizer
+        param_names = self._get_param_names()
+
+        if self._calibration_data_type == "strain":
+            x_obs = data.x_strain
+            y_obs = data.strains
+            sigma_obs = data.strain_noise_std
+        else:
+            x_obs = data.x_disp
+            y_obs = data.displacements
+            sigma_obs = data.displacement_noise_std
+
+        y_obs_norm = y_obs / normalizer.displacement_scale
+        sigma_norm = sigma_obs / normalizer.displacement_scale
+
+        geometry = data.geometry
+        load = data.load_case
+
+        def log_likelihood(params_array: np.ndarray) -> float:
+            """Compute log p(y|θ) for a parameter vector."""
+            params_dict = dict(zip(param_names, params_array, strict=False))
+
+            # Get E in physical units
+            E_norm = params_dict.get("elastic_modulus", 1.0)
+            E_phys = E_norm * normalizer.E_scale
+
+            # Compute forward model prediction
+            fwd_params = {"elastic_modulus": E_phys}
+            if "poisson_ratio" in params_dict:
+                fwd_params["poisson_ratio"] = params_dict["poisson_ratio"]
+
+            try:
+                y_pred = self._forward_model(fwd_params, x_obs, geometry, load)
+            except Exception:
+                return -1e10
+
+            y_pred_norm = y_pred / normalizer.displacement_scale
+
+            # Get sigma from params or use observed noise
+            sigma = abs(params_dict.get("sigma", sigma_norm))
+            if sigma < 1e-20:
+                return -1e10
+
+            # Gaussian log-likelihood
+            residuals = y_obs_norm - y_pred_norm
+            n = len(residuals)
+            ll = -0.5 * n * np.log(2 * np.pi) - n * np.log(sigma) - 0.5 * np.sum(residuals**2) / sigma**2
+            return float(ll)
+
+        return log_likelihood
+
+    def _build_log_prior_func(self) -> Callable:
+        """
+        Build a NumPy log-prior callable for bridge sampling.
+
+        Returns a function that takes a 1D parameter array and returns
+        log p(θ) evaluated at the normalized parameter values.
+        """
+        from scipy import stats
+
+        param_names = self._get_param_names()
+        priors = self.priors
+
+        # Pre-build scipy distributions for each parameter
+        param_dists = []
+        for name in param_names:
+            if name == "elastic_modulus":
+                # In normalized space: Normal(1.0, sigma)
+                sigma = priors[name].params.get("sigma", 0.05)
+                param_dists.append(stats.norm(loc=1.0, scale=sigma))
+            elif name == "sigma":
+                # HalfNormal(1.0) in normalized space
+                param_dists.append(stats.halfnorm(scale=1.0))
+            elif name == "poisson_ratio":
+                mu = priors[name].params.get("mu", 0.3)
+                sigma = priors[name].params.get("sigma", 0.03)
+                param_dists.append(stats.norm(loc=mu, scale=sigma))
+            else:
+                # Generic normal fallback
+                mu = priors[name].params.get("mu", 0.0)
+                sigma = priors[name].params.get("sigma", 1.0)
+                param_dists.append(stats.norm(loc=mu, scale=sigma))
+
+        def log_prior(params_array: np.ndarray) -> float:
+            """Compute log p(θ) for a parameter vector."""
+            lp = 0.0
+            for val, dist in zip(params_array, param_dists, strict=False):
+                lp += dist.logpdf(val)
+            return float(lp)
+
+        return log_prior
 
     def posterior_predictive_check(
         self,

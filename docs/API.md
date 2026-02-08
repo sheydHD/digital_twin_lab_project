@@ -63,7 +63,7 @@ def strain(self, x: float, y: float, P: float) -> float:
     
     Args:
         x: Position along beam [m]
-        y: Position from neutral axis [m] (positive up)
+        y: Position from neutral axis [m] (positive downward)
         P: Applied point load at tip [N]
     
     Returns:
@@ -419,6 +419,7 @@ calibrator = BayesianCalibrator(
 def calibrate(
     self,
     data: pd.DataFrame,
+    data_type: str = "displacement",
     output_dir: Optional[Path] = None,
 ) -> az.InferenceData:
     """
@@ -426,6 +427,7 @@ def calibrate(
     
     Args:
         data: DataFrame with columns [x, y, displacement, strain]
+        data_type: Type of data to fit — 'displacement' or 'strain'
         output_dir: Directory to save trace (optional)
     
     Returns:
@@ -473,6 +475,20 @@ with pm.Model() as model:
         chains=2,
         target_accept=0.95,
     )
+```
+
+**Strain Calibration**:
+
+The calibrator also supports strain-based calibration. The strain forward model computes surface strain at sensor locations:
+
+$$\varepsilon(x) = -\frac{h}{2} \cdot \frac{P(L - x)}{EI}$$
+
+This formula is shared by both Euler-Bernoulli and Timoshenko theories, since shear deformation does not affect bending curvature (and hence axial strain). Usage:
+
+```python
+# Calibrate on strain data instead of displacement
+eb_trace_strain = eb_calibrator.calibrate(data, data_type="strain")
+timo_trace_strain = timo_calibrator.calibrate(data, data_type="strain")
 ```
 
 **Usage Example**:

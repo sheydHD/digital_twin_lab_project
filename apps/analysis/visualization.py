@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from apps.bayesian.calibration import CalibrationResult
+from apps.bayesian.calibration import CalibrationResult, PriorConfig
 from apps.bayesian.model_selection import ModelComparisonResult
 from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
 from apps.models.euler_bernoulli import EulerBernoulliBeam
@@ -232,6 +232,200 @@ class BeamVisualization:
         fig = plt.gcf()
         fig.suptitle(f'Posterior Distributions: {result.model_name}', fontsize=14, y=1.02)
 
+        plt.tight_layout()
+
+        if save:
+            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+
+        return fig
+
+    def plot_prior_distributions(
+        self,
+        priors: List[PriorConfig],
+        save: bool = True,
+        filename: str = "prior_distributions.png",
+    ) -> plt.Figure:
+        """
+        Plot prior distributions used in Bayesian calibration.
+
+        Shows the prior PDF for each parameter in normalized MCMC space
+        (how they actually appear to the sampler).
+
+        Args:
+            priors: List of PriorConfig objects
+            save: Whether to save figure
+            filename: Output filename
+
+        Returns:
+            Matplotlib figure
+        """
+        from scipy import stats
+
+        n_params = len(priors)
+        fig, axes = plt.subplots(1, n_params, figsize=(5 * n_params, 4))
+        if n_params == 1:
+            axes = [axes]
+
+        colors = {'elastic_modulus': '#2196F3', 'sigma': '#FF9800',
+                  'poisson_ratio': '#4CAF50'}
+
+        for ax, prior in zip(axes, priors, strict=False):
+            name = prior.param_name
+            color = colors.get(name, '#9C27B0')
+
+            if name == "elastic_modulus":
+                # In normalized space: Normal(1.0, sigma)
+                sigma = prior.params.get("sigma", 0.05)
+                x = np.linspace(1.0 - 4 * sigma, 1.0 + 4 * sigma, 300)
+                pdf = stats.norm.pdf(x, loc=1.0, scale=sigma)
+                label = f"Normal(1.0, {sigma})"
+                ax.set_xlabel("E (normalized)", fontsize=11)
+                ax.axvline(1.0, color='gray', linestyle=':', alpha=0.5, label="True value")
+            elif name == "sigma":
+                # HalfNormal(1.0) in normalized space
+                x = np.linspace(0, 4.0, 300)
+                pdf = stats.halfnorm.pdf(x, scale=1.0)
+                label = "HalfNormal(1.0)"
+                ax.set_xlabel("σ (normalized)", fontsize=11)
+            elif name == "poisson_ratio":
+                mu = prior.params.get("mu", 0.3)
+                sigma = prior.params.get("sigma", 0.03)
+                x = np.linspace(mu - 4 * sigma, mu + 4 * sigma, 300)
+                pdf = stats.norm.pdf(x, loc=mu, scale=sigma)
+                label = f"Normal({mu}, {sigma})"
+                ax.set_xlabel("ν (Poisson's ratio)", fontsize=11)
+                ax.axvline(0.3, color='gray', linestyle=':', alpha=0.5, label="True value")
+            else:
+                continue
+
+            ax.fill_between(x, pdf, alpha=0.3, color=color)
+            ax.plot(x, pdf, color=color, linewidth=2, label=label)
+            ax.set_ylabel("Probability Density", fontsize=11)
+            ax.set_title(f"Prior: {name}", fontsize=12)
+            ax.legend(fontsize=9)
+            ax.grid(True, alpha=0.3)
+
+        plt.suptitle("Prior Distributions (Normalized MCMC Space)", fontsize=14, y=1.02)
+        plt.tight_layout()
+
+        if save:
+            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+
+        return fig
+
+    def plot_prior_posterior_comparison(
+        self,
+        result: CalibrationResult,
+        priors: List[PriorConfig],
+        save: bool = True,
+        filename: Optional[str] = None,
+    ) -> plt.Figure:
+        """
+        Plot prior and posterior distributions overlaid for comparison.
+
+        Shows how the data updated our beliefs: narrow posteriors relative
+        to priors indicate informative data.
+
+        Args:
+            result: Calibration result with posterior trace
+            priors: Prior configurations used
+            save: Whether to save figure
+            filename: Output filename
+
+        Returns:
+            Matplotlib figure
+        """
+        from scipy import stats
+
+        if filename is None:
+            filename = f"prior_posterior_{result.model_name.lower().replace('-', '_')}.png"
+
+        # Determine which parameters to plot
+        param_names = [p.param_name for p in priors]
+        n_params = len(param_names)
+
+        fig, axes = plt.subplots(1, n_params, figsize=(5 * n_params, 4.5))
+        if n_params == 1:
+            axes = [axes]
+
+        prior_color = '#E57373'   # red-ish for prior
+        post_color = '#42A5F5'    # blue for posterior
+
+        for ax, prior in zip(axes, priors, strict=False):
+            name = prior.param_name
+
+            # Get posterior samples
+            if name in result.trace.posterior:
+                post_samples = result.trace.posterior[name].values.flatten()
+            else:
+                continue
+
+            # Plot posterior as KDE
+            from scipy.stats import gaussian_kde
+            kde = gaussian_kde(post_samples)
+            x_min, x_max = post_samples.min(), post_samples.max()
+            margin = (x_max - x_min) * 0.3
+            x_post = np.linspace(x_min - margin, x_max + margin, 300)
+            post_pdf = kde(x_post)
+
+            # Plot prior
+            if name == "elastic_modulus":
+                sigma = prior.params.get("sigma", 0.05)
+                x_prior = np.linspace(1.0 - 4 * sigma, 1.0 + 4 * sigma, 300)
+                prior_pdf = stats.norm.pdf(x_prior, loc=1.0, scale=sigma)
+                xlabel = "E (normalized)"
+                true_val = 1.0
+            elif name == "sigma":
+                x_prior = np.linspace(0, max(4.0, x_max + margin), 300)
+                prior_pdf = stats.halfnorm.pdf(x_prior, scale=1.0)
+                xlabel = "σ (normalized)"
+                true_val = None
+            elif name == "poisson_ratio":
+                mu = prior.params.get("mu", 0.3)
+                sigma = prior.params.get("sigma", 0.03)
+                x_prior = np.linspace(mu - 4 * sigma, mu + 4 * sigma, 300)
+                prior_pdf = stats.norm.pdf(x_prior, loc=mu, scale=sigma)
+                xlabel = "ν (Poisson's ratio)"
+                true_val = 0.3
+            else:
+                continue
+
+            # Normalize both to same visual scale for comparison
+            prior_max = prior_pdf.max()
+            post_max = post_pdf.max()
+            scale = prior_max / post_max if post_max > 0 else 1.0
+
+            ax.fill_between(x_prior, prior_pdf, alpha=0.2, color=prior_color)
+            ax.plot(x_prior, prior_pdf, color=prior_color, linewidth=2,
+                    linestyle='--', label='Prior')
+
+            ax.fill_between(x_post, post_pdf * scale, alpha=0.3, color=post_color)
+            ax.plot(x_post, post_pdf * scale, color=post_color, linewidth=2,
+                    label='Posterior')
+
+            if true_val is not None:
+                ax.axvline(true_val, color='#2E7D32', linestyle=':',
+                          linewidth=1.5, label=f'True = {true_val}')
+
+            # Add posterior summary text
+            post_mean = float(np.mean(post_samples))
+            post_std = float(np.std(post_samples))
+            ax.text(0.97, 0.97,
+                    f"μ = {post_mean:.4f}\nσ = {post_std:.4f}",
+                    transform=ax.transAxes, fontsize=9,
+                    verticalalignment='top', horizontalalignment='right',
+                    bbox={'boxstyle': 'round', 'facecolor': 'white', 'alpha': 0.8})
+
+            ax.set_xlabel(xlabel, fontsize=11)
+            ax.set_ylabel("Density (scaled)", fontsize=11)
+            ax.set_title(f"{name}", fontsize=12)
+            ax.legend(fontsize=9, loc='upper left')
+            ax.grid(True, alpha=0.3)
+
+        plt.suptitle(
+            f"Prior vs Posterior: {result.model_name}",
+            fontsize=14, y=1.02
+        )
         plt.tight_layout()
 
         if save:
