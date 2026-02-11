@@ -12,7 +12,6 @@ Provides plotting functions for:
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import arviz as az
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
@@ -197,122 +196,6 @@ class BeamVisualization:
 
         return fig
 
-    def plot_posterior_distributions(
-        self,
-        result: CalibrationResult,
-        params_to_plot: Optional[List[str]] = None,
-        save: bool = True,
-        filename: Optional[str] = None,
-    ) -> plt.Figure:
-        """
-        Plot posterior distributions from Bayesian calibration.
-
-        Args:
-            result: Calibration result with trace
-            params_to_plot: Parameter names to plot (None = all)
-            save: Whether to save figure
-            filename: Output filename
-
-        Returns:
-            Matplotlib figure
-
-        """
-        if filename is None:
-            filename = f"posterior_{result.model_name.lower().replace('-', '_')}.png"
-
-        # Use ArviZ for posterior plotting
-        var_names = params_to_plot if params_to_plot else None
-
-        az.plot_posterior(
-            result.trace,
-            var_names=var_names,
-            figsize=(12, 4),
-        )
-
-        fig = plt.gcf()
-        fig.suptitle(f'Posterior Distributions: {result.model_name}', fontsize=14, y=1.02)
-
-        plt.tight_layout()
-
-        if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
-
-        return fig
-
-    def plot_prior_distributions(
-        self,
-        priors: List[PriorConfig],
-        save: bool = True,
-        filename: str = "prior_distributions.png",
-    ) -> plt.Figure:
-        """
-        Plot prior distributions used in Bayesian calibration.
-
-        Shows the prior PDF for each parameter in normalized MCMC space
-        (how they actually appear to the sampler).
-
-        Args:
-            priors: List of PriorConfig objects
-            save: Whether to save figure
-            filename: Output filename
-
-        Returns:
-            Matplotlib figure
-        """
-        from scipy import stats
-
-        n_params = len(priors)
-        fig, axes = plt.subplots(1, n_params, figsize=(5 * n_params, 4))
-        if n_params == 1:
-            axes = [axes]
-
-        colors = {'elastic_modulus': '#2196F3', 'sigma': '#FF9800',
-                  'poisson_ratio': '#4CAF50'}
-
-        for ax, prior in zip(axes, priors, strict=False):
-            name = prior.param_name
-            color = colors.get(name, '#9C27B0')
-
-            if name == "elastic_modulus":
-                # In normalized space: Normal(1.0, sigma)
-                sigma = prior.params.get("sigma", 0.05)
-                x = np.linspace(1.0 - 4 * sigma, 1.0 + 4 * sigma, 300)
-                pdf = stats.norm.pdf(x, loc=1.0, scale=sigma)
-                label = f"Normal(1.0, {sigma})"
-                ax.set_xlabel("E (normalized)", fontsize=11)
-                ax.axvline(1.0, color='gray', linestyle=':', alpha=0.5, label="True value")
-            elif name == "sigma":
-                # HalfNormal(1.0) in normalized space
-                x = np.linspace(0, 4.0, 300)
-                pdf = stats.halfnorm.pdf(x, scale=1.0)
-                label = "HalfNormal(1.0)"
-                ax.set_xlabel("σ (normalized)", fontsize=11)
-            elif name == "poisson_ratio":
-                mu = prior.params.get("mu", 0.3)
-                sigma = prior.params.get("sigma", 0.03)
-                x = np.linspace(mu - 4 * sigma, mu + 4 * sigma, 300)
-                pdf = stats.norm.pdf(x, loc=mu, scale=sigma)
-                label = f"Normal({mu}, {sigma})"
-                ax.set_xlabel("ν (Poisson's ratio)", fontsize=11)
-                ax.axvline(0.3, color='gray', linestyle=':', alpha=0.5, label="True value")
-            else:
-                continue
-
-            ax.fill_between(x, pdf, alpha=0.3, color=color)
-            ax.plot(x, pdf, color=color, linewidth=2, label=label)
-            ax.set_ylabel("Probability Density", fontsize=11)
-            ax.set_title(f"Prior: {name}", fontsize=12)
-            ax.legend(fontsize=9)
-            ax.grid(True, alpha=0.3)
-
-        plt.suptitle("Prior Distributions (Normalized MCMC Space)", fontsize=14, y=1.02)
-        plt.tight_layout()
-
-        if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
-
-        return fig
-
     def plot_prior_posterior_comparison(
         self,
         result: CalibrationResult,
@@ -433,47 +316,6 @@ class BeamVisualization:
 
         return fig
 
-    def plot_trace(
-        self,
-        result: CalibrationResult,
-        params_to_plot: Optional[List[str]] = None,
-        save: bool = True,
-        filename: Optional[str] = None,
-    ) -> plt.Figure:
-        """
-        Plot MCMC trace plots for convergence diagnostics.
-
-        Args:
-            result: Calibration result
-            params_to_plot: Parameters to plot
-            save: Whether to save
-            filename: Output filename
-
-        Returns:
-            Matplotlib figure
-
-        """
-        if filename is None:
-            filename = f"trace_{result.model_name.lower().replace('-', '_')}.png"
-
-        var_names = params_to_plot if params_to_plot else None
-
-        az.plot_trace(
-            result.trace,
-            var_names=var_names,
-            figsize=(12, 8),
-        )
-
-        fig = plt.gcf()
-        fig.suptitle(f'MCMC Traces: {result.model_name}', fontsize=14, y=1.02)
-
-        plt.tight_layout()
-
-        if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
-
-        return fig
-
     def plot_model_comparison(
         self,
         comparison: ModelComparisonResult,
@@ -523,8 +365,6 @@ class BeamVisualization:
 
         if comparison.waic_difference is not None:
             info_text += f"\nΔWAIC: {comparison.waic_difference:.2f}"
-        if comparison.loo_difference is not None:
-            info_text += f"\nΔLOO: {comparison.loo_difference:.2f}"
 
         ax2.text(0.1, 0.5, info_text, transform=ax2.transAxes,
                 fontsize=12, verticalalignment='center',
@@ -560,7 +400,7 @@ class BeamVisualization:
         log_bfs = study_results["log_bayes_factors"]
         transition = study_results.get("transition_aspect_ratio")
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+        fig, ax1 = plt.subplots(figsize=(10, 6))
 
         # Log Bayes Factor vs Aspect Ratio
         ax1.plot(aspect_ratios, log_bfs, 'bo-', linewidth=2, markersize=10)
@@ -581,19 +421,6 @@ class BeamVisualization:
         ax1.set_title('Model Evidence vs Beam Slenderness', fontsize=14)
         ax1.legend(loc='best')
         ax1.grid(True, alpha=0.3)
-
-        # Interpretation text
-        ax2.axis('off')
-
-        guidelines = study_results.get("guidelines", {})
-        guide_text = "Practical Guidelines\n" + "="*40 + "\n\n"
-        for _key, value in guidelines.items():
-            guide_text += f"{value}\n\n"
-
-        ax2.text(0.05, 0.95, guide_text, transform=ax2.transAxes,
-                fontsize=10, verticalalignment='top',
-                family='serif',
-                bbox={'boxstyle': 'round', 'facecolor': 'lightyellow', 'alpha': 0.9})
 
         plt.tight_layout()
 
@@ -655,91 +482,6 @@ class BeamVisualization:
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
-
-        if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
-
-        return fig
-
-    def create_summary_report(
-        self,
-        study_results: Dict,
-        save: bool = True,
-        filename: str = "summary_report.png",
-    ) -> plt.Figure:
-        """
-        Create comprehensive summary report figure.
-
-        Args:
-            study_results: Complete study results
-            save: Whether to save
-            filename: Output filename
-
-        Returns:
-            Matplotlib figure
-
-        """
-        fig = plt.figure(figsize=(16, 12))
-
-        # Use gridspec for complex layout
-        gs = fig.add_gridspec(3, 3, hspace=0.3, wspace=0.3)
-
-        # Plot 1: Log BF vs aspect ratio
-        ax1 = fig.add_subplot(gs[0, :2])
-        aspect_ratios = study_results["aspect_ratios"]
-        log_bfs = study_results["log_bayes_factors"]
-        ax1.plot(aspect_ratios, log_bfs, 'bo-', linewidth=2, markersize=8)
-        ax1.axhline(y=0, color='k', linestyle='-')
-        ax1.set_xlabel('Aspect Ratio (L/h)')
-        ax1.set_ylabel('Log Bayes Factor')
-        ax1.set_title('Model Selection Across Aspect Ratios')
-        ax1.grid(True, alpha=0.3)
-
-        # Plot 2: Model probabilities
-        ax2 = fig.add_subplot(gs[0, 2])
-        # Aggregate model probabilities
-        eb_probs = [c.model1_probability for c in study_results["comparisons"]]
-        [c.model2_probability for c in study_results["comparisons"]]
-        ax2.fill_between(aspect_ratios, 0, eb_probs, alpha=0.5, label='Euler-Bernoulli')
-        ax2.fill_between(aspect_ratios, eb_probs, 1, alpha=0.5, label='Timoshenko')
-        ax2.set_xlabel('Aspect Ratio (L/h)')
-        ax2.set_ylabel('Probability')
-        ax2.set_title('Model Probabilities')
-        ax2.legend()
-
-        # Text: Guidelines
-        ax3 = fig.add_subplot(gs[1:, :])
-        ax3.axis('off')
-
-        guidelines = study_results.get("guidelines", {})
-        transition = study_results.get("transition_aspect_ratio", "N/A")
-
-        summary_text = f"""
-        BAYESIAN MODEL SELECTION SUMMARY REPORT
-        {'='*60}
-
-        Study Parameters:
-        - Aspect ratios analyzed: {min(aspect_ratios):.1f} to {max(aspect_ratios):.1f}
-        - Number of configurations: {len(aspect_ratios)}
-        - Transition aspect ratio: {transition if transition else 'Not found'}
-
-        Key Findings:
-        {guidelines.get('transition_rule', 'N/A')}
-
-        Recommendations:
-        {guidelines.get('slender_beams', 'N/A')}
-
-        {guidelines.get('thick_beams', 'N/A')}
-
-        Digital Twin Guidelines:
-        {guidelines.get('digital_twin_recommendation', 'N/A')}
-        """
-
-        ax3.text(0.05, 0.95, summary_text, transform=ax3.transAxes,
-                fontsize=11, verticalalignment='top', family='monospace',
-                bbox={'boxstyle': 'round', 'facecolor': 'white', 'edgecolor': 'gray'})
-
-        plt.suptitle('Bayesian Model Selection for Beam Theory', fontsize=16, fontweight='bold')
 
         if save:
             fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')

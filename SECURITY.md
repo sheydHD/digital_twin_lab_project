@@ -1,200 +1,69 @@
-# Security Policy
+# security policy
 
-## Supported Versions
+## supported versions
 
-We actively support the following versions with security updates:
+| version | supported |
+|---------|-----------|
+| 1.0.x   | yes       |
+| < 1.0   | no        |
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+## reporting a vulnerability
 
-## Reporting a Vulnerability
-
-We take security seriously. If you discover a security vulnerability, please follow these steps:
-
-### 1. **Do Not** Open a Public Issue
-
-Security vulnerabilities should not be disclosed publicly until a fix is available.
-
-### 2. Report Privately
-
-Send an email to: **security@example.com** (or contact maintainers directly)
+Do not open a public issue. Send an email to the maintainers directly.
 
 Include:
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if any)
+- description of the vulnerability
+- steps to reproduce
+- potential impact
+- suggested fix (if any)
 
-### 3. Response Timeline
+### response timeline
 
-- **Initial Response**: Within 48 hours
-- **Assessment**: Within 1 week
-- **Fix Timeline**: Depends on severity
-  - Critical: 1-7 days
-  - High: 1-2 weeks
-  - Medium: 2-4 weeks
-  - Low: Next release cycle
+- initial response: within 48 hours
+- assessment: within 1 week
+- fix timeline: depends on severity (critical: 1-7 days, high: 1-2 weeks, medium: 2-4 weeks)
 
-### 4. Disclosure Process
+## security considerations
 
-Once a fix is available:
-1. We'll prepare a security advisory
-2. Release a patched version
-3. Publish the advisory with credit to reporter
-4. Notify users through GitHub Security Advisory
+### arbitrary code execution
 
-## Security Best Practices
+YAML loader uses `safe_load()` — no code execution from config files. Configuration schema is validated before use.
 
-### For Users
+### resource exhaustion
 
-1. **Keep Dependencies Updated**
-   ```bash
-   pip install --upgrade digital-twin-lab
-   ```
+Default limits on MCMC sample counts prevent excessive memory use. Configuration validation rejects unreasonable values.
 
-2. **Validate Configuration Files**
-   - Don't use configuration from untrusted sources
-   - Validate YAML files before loading
+### file system access
 
-3. **Sanitize Input Data**
-   - Verify CSV files are from trusted sources
-   - Check for NaN or inf values
+All output paths are validated. No access to files outside the project directory.
 
-4. **Use Virtual Environments**
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
+### dependencies
 
-### For Contributors
+Run `pip-audit` or `safety check` periodically to scan for known vulnerabilities in third-party packages.
 
-1. **No Hardcoded Secrets**
-   - Never commit API keys, passwords, or tokens
-   - Use environment variables or config files (in `.gitignore`)
-
-2. **Input Validation**
-   ```python
-   def validate_input(value: float, min_val: float, max_val: float):
-       if not (min_val <= value <= max_val):
-           raise ValueError(f"Value {value} out of range [{min_val}, {max_val}]")
-   ```
-
-3. **Safe File Operations**
-   ```python
-   from pathlib import Path
-   
-   # Prevent directory traversal
-   def safe_path(base_dir: Path, filename: str) -> Path:
-       path = (base_dir / filename).resolve()
-       if not path.is_relative_to(base_dir):
-           raise ValueError("Path traversal attempt detected")
-       return path
-   ```
-
-4. **Dependency Scanning**
-   ```bash
-   pip install safety
-   safety check
-   ```
-
-## Known Security Considerations
-
-### 1. Arbitrary Code Execution
-
-**Risk**: Loading untrusted configuration files could execute arbitrary code
-
-**Mitigation**: 
-- YAML loader uses `safe_load()` (no code execution)
-- Configuration schema validation enforced
-
-### 2. Resource Exhaustion
-
-**Risk**: Large MCMC sample counts could exhaust memory
-
-**Mitigation**:
-- Default limits on sample counts
-- Configuration validation prevents unreasonable values
-- Pipeline monitors memory usage
-
-### 3. File System Access
-
-**Risk**: Writing to arbitrary locations
-
-**Mitigation**:
-- All output paths validated
-- No access to files outside project directory
-- Path sanitization implemented
-
-### 4. Dependency Vulnerabilities
-
-**Risk**: Third-party packages may have vulnerabilities
-
-**Mitigation**:
-- Regular `pip audit` checks
-- Dependabot alerts enabled
-- Pin major versions, allow minor updates
-
-## Secure Configuration Example
+## secure configuration
 
 ```yaml
-# configs/secure_config.yaml
-
-# Safe: All paths are relative to project root
 output:
-  base_dir: "outputs"  # Not "/tmp" or absolute paths
-  
-# Safe: Reasonable computational limits
+  base_dir: "outputs"        # relative paths only
+
 bayesian:
-  n_samples: 800      # Not 1000000
-  n_chains: 2         # Not 100
-  
-# Safe: Validated numeric ranges
+  n_samples: 800             # reasonable limits
+  n_chains: 2
+
 beam_parameters:
-  length: 1.0         # Must be positive
-  aspect_ratios: [5, 8, 10]  # Must be > 0
+  length: 1.0                # must be positive
+  aspect_ratios: [5, 8, 10]  # must be > 0
 ```
 
-## Audit Log
+## security tools
 
-| Date       | Issue | Severity | Status |
-|------------|-------|----------|--------|
-| 2026-01-17 | N/A   | N/A      | No vulnerabilities reported |
+```bash
+pip install bandit && bandit -r apps/
+pip install pip-audit && pip-audit
+```
 
-## Security Tools
+## contact
 
-We recommend using:
-
-- **Bandit**: Python security linter
-  ```bash
-  pip install bandit
-  bandit -r apps/
-  ```
-
-- **Safety**: Dependency vulnerability scanner
-  ```bash
-  pip install safety
-  safety check
-  ```
-
-- **pip-audit**: Python package auditor
-  ```bash
-  pip install pip-audit
-  pip-audit
-  ```
-
-## Contact
-
-For security concerns, contact:
-- **Email**: security@example.com
-- **GitHub**: Open a private security advisory
-
-## Acknowledgments
-
-We thank the following security researchers:
-- (None yet - be the first!)
-
----
-
-Last updated: 2026-01-17
+- email: maintainers (see AUTHORS.md)
+- GitHub: open a private security advisory

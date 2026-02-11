@@ -75,7 +75,7 @@ docs = [
 ]
 
 [project.scripts]
-beam-model-selection = "apps.main:main"
+beam-model-selection = "main:main"
 
 [project.urls]
 Homepage = "https://github.com/sheydHD/digital_twin_lab_project"

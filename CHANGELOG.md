@@ -1,127 +1,60 @@
-# Changelog
+# changelog
 
-All notable changes to this project will be documented in this file.
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Follows [Semantic Versioning](https://semver.org/).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [unreleased]
 
-## [Unreleased]
+### added
+- bridge sampling for marginal likelihood estimation (Meng & Wong, 1996)
+- Optuna-based hyperparameter optimization for priors
+- frequency-based analytical model comparison
 
-### Added
-- Comprehensive documentation (ARCHITECTURE.md, CONTRIBUTING.md, API.md)
-- Development guide with testing and profiling instructions
-- CI/CD workflow examples
-- Type hints for all public functions
+### removed
+- LOO-CV computation (redundant with bridge sampling)
+- harmonic mean estimator (unstable, replaced by bridge sampling)
+- EulerBernoulliFEM class from beam_fem.py (unused)
+- dead code across models, calibration, normalization, and utilities
+
+### fixed
+- bare expression bugs in timoshenko.py and test_normalization.py
+- chained != comparison in model_selection.py
 
 ## [1.0.0] - 2026-01-17
 
-### Added
-- 1D Timoshenko beam FEM implementation for ground truth generation
-- 1D Euler-Bernoulli beam FEM for validation
+### added
+- 1D Timoshenko beam FEM for ground truth generation
 - Bayesian model selection framework using PyMC
-- WAIC and LOO-CV model comparison metrics
-- Automated pipeline orchestration across multiple aspect ratios
-- Comprehensive visualization and reporting system
-- Configuration-driven execution via YAML
+- WAIC model comparison (diagnostic)
+- automated pipeline across multiple aspect ratios
+- visualization and reporting system
+- configuration-driven execution via YAML
 
-### Changed
-- **BREAKING**: Replaced 2D plane stress FEM with 1D beam FEM
-  - Eliminates systematic stiffness mismatch
-  - 100× performance improvement
-  - Exact consistency with analytical beam theories
-- Reduced default MCMC samples from 2000 to 800 per chain
-- Reduced noise level from 0.1% to 0.05% for better discrimination
-- Updated mesh sizing: adaptive element count based on aspect ratio
+### changed
+- replaced 2D plane stress FEM with 1D beam FEM (100x faster, exact consistency)
+- reduced default MCMC samples from 2000 to 800 per chain
+- reduced noise level from 0.1% to 0.05%
+- adaptive mesh sizing based on aspect ratio
 
-### Fixed
-- **Critical**: L/h=8 aspect ratio now correctly favors Timoshenko (was favoring EB)
-- Model selection results now physically accurate across all aspect ratios
-- Eliminated numerical instability at high aspect ratios (L/h=30+)
-- Fixed memory issues causing crashes on standard laptops
+### fixed
+- L/h=8 now correctly favors Timoshenko (was incorrectly favoring EB with 2D FEM)
+- model selection results physically accurate across all aspect ratios
+- numerical instability at high aspect ratios eliminated
+- memory issues on standard laptops fixed
 
-### Performance
-- Data generation: 5 seconds for 8 aspect ratios (was 2-3 minutes)
-- Full pipeline: ~30-40 minutes (was 1-2 hours)
-- Peak memory usage: ~1 GB (was 4+ GB)
-
-### Results
-- Transition aspect ratio: L/h ≈ 19.2
-- Thick beams (L/h ≤ 15): Strong Timoshenko preference (log BF down to -10.8)
-- Slender beams (L/h = 20-30): Euler-Bernoulli preference
-- Very slender beams (L/h = 50): Models indistinguishable (correct behavior)
+### results
+- transition aspect ratio: L/h ~ 19.2
+- thick beams (L/h <= 15): strong Timoshenko preference (log BF down to -10.8)
+- slender beams (L/h = 20-30): EB preference
+- very slender beams (L/h = 50): models indistinguishable
 
 ## [0.1.0] - 2025-12-15
 
-### Added
-- Initial project structure
-- Basic beam theory implementations (EB and Timoshenko)
-- 2D plane stress FEM (legacy, deprecated in v1.0.0)
+### added
+- initial project structure
+- basic beam theory implementations (EB and Timoshenko)
+- 2D plane stress FEM (deprecated in v1.0.0)
 - PyMC integration for Bayesian calibration
-- Basic visualization utilities
 
-### Known Issues
+### known issues
 - 2D FEM has systematic stiffness bias vs beam theories
-- Non-monotonic model selection results at intermediate aspect ratios
-- Performance issues at high aspect ratios
-
----
-
-## Release Notes Format
-
-Each release includes:
-- **Added**: New features
-- **Changed**: Changes to existing functionality
-- **Deprecated**: Soon-to-be removed features
-- **Removed**: Removed features
-- **Fixed**: Bug fixes
-- **Security**: Security vulnerability patches
-- **Performance**: Performance improvements
-
----
-
-## Migration Guides
-
-### Migrating from 0.x to 1.0
-
-**Breaking Changes**:
-
-1. **FEM Backend Change**
-   ```python
-   # Old (0.x)
-   from apps.fem.cantilever_fem import CantileverFEM
-   fem = CantileverFEM(nx=100, ny=20, ...)
-   
-   # New (1.0+)
-   from apps.fem.beam_fem import TimoshenkoBeamFEM
-   fem = TimoshenkoBeamFEM(n_elements=40, ...)
-   ```
-
-2. **Configuration Updates**
-   ```yaml
-   # Old
-   bayesian:
-     n_samples: 2000
-   data:
-     noise_fraction: 0.001
-   
-   # New
-   bayesian:
-     n_samples: 800
-   data:
-     noise_fraction: 0.0005
-   ```
-
-3. **Mesh Parameters**
-   ```python
-   # Old: 2D mesh required (nx, ny)
-   mesh = (100, 20)
-   
-   # New: 1D mesh, single parameter
-   n_elements = 40  # Computed adaptively: 4 × L/h
-   ```
-
-**Benefits**:
-- 100× faster execution
-- Physically correct results
-- Lower memory footprint
-- No more crashes on standard hardware
+- non-monotonic model selection at intermediate aspect ratios

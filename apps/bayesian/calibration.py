@@ -84,9 +84,8 @@ class CalibrationResult:
         trace: PyMC InferenceData object with posterior samples
         posterior_summary: Summary statistics for parameters (in PHYSICAL units)
         log_likelihood: Log-likelihood at posterior samples
-        waic: Widely Applicable Information Criterion
-        loo: Leave-One-Out cross-validation score
-        marginal_likelihood_estimate: Estimated marginal likelihood
+        waic: Widely Applicable Information Criterion (elpd_waic, for diagnostics)
+        marginal_likelihood_estimate: Estimated log marginal likelihood (bridge sampling)
         convergence_diagnostics: R-hat and ESS statistics
         normalization_params: Normalization scales used during fitting
         posterior_summary_normalized: Summary statistics in normalized units
@@ -97,7 +96,6 @@ class CalibrationResult:
     posterior_summary: Dict  # Physical units
     log_likelihood: np.ndarray
     waic: Optional[float] = None
-    loo: Optional[float] = None
     marginal_likelihood_estimate: Optional[float] = None
     convergence_diagnostics: Optional[Dict] = None
     normalization_params: Optional[NormalizationParams] = None
@@ -317,40 +315,6 @@ class BayesianCalibrator(ABC):
 
         return model
 
-    def _pytensor_forward(
-        self,
-        params: Dict,
-        x: np.ndarray,
-        geometry: BeamGeometry,
-        load: LoadCase,
-    ):
-        """
-        PyTensor-compatible forward model.
-
-        For analytical beam models, this should compute deflection as a
-        function of PyTensor variables.
-        """
-        # Placeholder - needs proper PyTensor implementation
-        import pytensor.tensor as pt
-
-        # Example for Euler-Bernoulli with point load:
-        # w = (P * x^2 / (6*E*I)) * (3*L - x)
-
-        L = geometry.length
-        I = geometry.moment_of_inertia
-        P = load.point_load
-
-        E = params.get("elastic_modulus", 210e9)
-
-        # Convert to PyTensor
-        x_t = pt.as_tensor_variable(x)
-
-        # Compute deflection
-        EI = E * I
-        w = (P * x_t**2 / (6 * EI)) * (3 * L - x_t)
-
-        return w
-
     def _pytensor_forward_normalized(
         self,
         params: Dict,
@@ -451,7 +415,7 @@ class BayesianCalibrator(ABC):
         strain_physical = -y_surface * M_x / EI
 
         # Normalize
-        strain_normalized = strain_physical / normalizer.displacement_scale
+        strain_normalized = strain_physical / normalizer.strain_scale
 
         return strain_normalized
 
@@ -515,9 +479,8 @@ class BayesianCalibrator(ABC):
             posterior_summary_norm, self._normalizer
         )
 
-        # Compute model comparison criteria
+        # Compute WAIC for diagnostics (not used for model comparison)
         waic_result = az.waic(self._trace)
-        loo_result = az.loo(self._trace)
 
         # Convergence diagnostics
         rhat = az.rhat(self._trace)
@@ -537,7 +500,6 @@ class BayesianCalibrator(ABC):
             posterior_summary=posterior_summary,  # Physical units
             log_likelihood=log_lik,
             waic=float(waic_result.elpd_waic),  # ArviZ returns ELPDData object
-            loo=float(loo_result.elpd_loo),      # Access elpd_loo attribute
             convergence_diagnostics=convergence,
             normalization_params=self._normalizer,
             posterior_summary_normalized=posterior_summary_norm,
@@ -675,86 +637,58 @@ class BayesianCalibrator(ABC):
 
         return initvals
 
-    def compute_marginal_likelihood(
-        self,
-        method: str = "harmonic_mean",
-    ) -> float:
+    def compute_marginal_likelihood(self) -> float:
         """
-        Estimate marginal likelihood p(y|M) for model comparison.
+        Estimate marginal likelihood p(y|M) using bridge sampling.
 
-        The marginal likelihood (evidence) is:
+        The marginal likelihood (model evidence) is:
         p(y|M) = ∫ p(y|θ,M) p(θ|M) dθ
 
-        Methods:
-        - harmonic_mean: Simple but high-variance estimator
-        - bridge_sampling: More accurate but complex
-        - SMC: Sequential Monte Carlo for direct estimation
-
-        Args:
-            method: Estimation method
+        Bridge sampling (Meng & Wong, 1996) is used because:
+        - It provides accurate, stable estimates with known standard error
+        - The harmonic mean estimator has infinite variance and is unreliable
+        - WAIC/LOO approximate predictive accuracy, not true evidence
 
         Returns:
             Log marginal likelihood estimate
 
+        Raises:
+            ValueError: If calibrate() has not been called first
+            RuntimeError: If bridge sampling fails to converge
         """
         if self._trace is None:
             raise ValueError("Must run calibrate() before computing marginal likelihood")
 
-        log_lik = self._trace.log_likelihood["y_obs"].values.sum(axis=-1).flatten()
+        from apps.bayesian.bridge_sampling import BridgeSampler
 
-        if method == "harmonic_mean":
-            # Harmonic mean estimator (Newton & Raftery, 1994)
-            # log p(y|M) ≈ -log(mean(exp(-log_lik)))
-            #
-            # Numerically stable version using log-sum-exp trick:
-            # log(mean(exp(-log_lik))) = log(sum(exp(-log_lik))) - log(n)
-            #                          = logsumexp(-log_lik) - log(n)
-            from scipy.special import logsumexp
+        log_lik_func = self._build_log_likelihood_func()
+        log_prior_func = self._build_log_prior_func()
+        param_names = self._get_param_names()
 
-            neg_log_lik = -log_lik
-            n = len(neg_log_lik)
-            log_mean_exp = logsumexp(neg_log_lik) - np.log(n)
-            log_ml = -log_mean_exp
+        sampler = BridgeSampler(
+            trace=self._trace,
+            log_likelihood_func=log_lik_func,
+            log_prior_func=log_prior_func,
+            param_names=param_names,
+            n_bridge_samples=5000,
+            tol=1e-8,
+            max_iter=500,
+        )
+        result = sampler.estimate()
 
-            return log_ml
-
-        elif method == "bridge_sampling":
-            from apps.bayesian.bridge_sampling import BridgeSampler
-
-            log_lik_func = self._build_log_likelihood_func()
-            log_prior_func = self._build_log_prior_func()
-            param_names = self._get_param_names()
-
-            sampler = BridgeSampler(
-                trace=self._trace,
-                log_likelihood_func=log_lik_func,
-                log_prior_func=log_prior_func,
-                param_names=param_names,
-                n_bridge_samples=5000,
-                tol=1e-8,
-                max_iter=500,
+        if not result.converged:
+            raise RuntimeError(
+                f"Bridge sampling did not converge for {self.model_name}. "
+                f"SE={result.standard_error:.4f}. "
+                "Consider increasing n_samples or n_tune for better posterior quality."
             )
-            result = sampler.estimate()
 
-            if not result.converged:
-                logger.warning(
-                    f"Bridge sampling did not converge for {self.model_name}. "
-                    f"SE={result.standard_error:.4f}. Falling back to harmonic mean."
-                )
-                return self.compute_marginal_likelihood(method="harmonic_mean")
-
-            logger.info(
-                f"Bridge sampling for {self.model_name}: "
-                f"log_ML={result.log_marginal_likelihood:.4f} "
-                f"± {result.standard_error:.4f}"
-            )
-            return result.log_marginal_likelihood
-
-        elif method == "smc":
-            raise NotImplementedError("SMC estimation not yet implemented")
-
-        else:
-            raise ValueError(f"Unknown method: {method}")
+        logger.info(
+            f"Bridge sampling for {self.model_name}: "
+            f"log_ML={result.log_marginal_likelihood:.4f} "
+            f"± {result.standard_error:.4f}"
+        )
+        return result.log_marginal_likelihood
 
     def _get_param_names(self) -> List[str]:
         """Get parameter names used in MCMC (excluding derived quantities)."""
@@ -861,39 +795,6 @@ class BayesianCalibrator(ABC):
 
         return log_prior
 
-    def posterior_predictive_check(
-        self,
-        data: SyntheticDataset,
-        n_samples: int = 500,
-    ) -> Dict:
-        """
-        Perform posterior predictive checks.
-
-        Generate predictions from posterior samples and compare to observed data.
-
-        Args:
-            data: Original dataset
-            n_samples: Number of posterior samples to use
-
-        Returns:
-            Dictionary with PPC results
-
-        """
-        if self._trace is None:
-            raise ValueError("Must run calibrate() first")
-
-        with self._model:
-            ppc = pm.sample_posterior_predictive(
-                self._trace,
-                var_names=["y_obs"],
-                random_seed=self.random_seed,
-            )
-
-        return {
-            "ppc_samples": ppc.posterior_predictive["y_obs"].values,
-            "observed": data.displacements,
-        }
-
 
 class EulerBernoulliCalibrator(BayesianCalibrator):
     """
@@ -927,35 +828,6 @@ class EulerBernoulliCalibrator(BayesianCalibrator):
 
         beam = EulerBernoulliBeam(geometry, material)
         return beam.compute_deflection(x_locations, load)
-
-    def _pytensor_forward(
-        self,
-        params: Dict,
-        x: np.ndarray,
-        geometry: BeamGeometry,
-        load: LoadCase,
-    ):
-        """
-        PyTensor-compatible forward model for Euler-Bernoulli beam.
-
-        Deflection formula for cantilever with tip load:
-        w(x) = (P * x^2 / (6*E*I)) * (3*L - x)
-        """
-        import pytensor.tensor as pt
-
-        L = geometry.length
-        I = geometry.moment_of_inertia
-        P = load.point_load
-
-        E = params.get("elastic_modulus", 210e9)
-
-        x_t = pt.as_tensor_variable(x)
-
-        # Euler-Bernoulli: bending only (negative for downward deflection)
-        EI = E * I
-        w = -(P * x_t**2 / (6 * EI)) * (3 * L - x_t)
-
-        return w
 
     def _pytensor_forward_normalized(
         self,
@@ -1026,45 +898,6 @@ class TimoshenkoCalibrator(BayesianCalibrator):
 
         beam = TimoshenkoBeam(geometry, material)
         return beam.compute_deflection(x_locations, load)
-
-    def _pytensor_forward(
-        self,
-        params: Dict,
-        x: np.ndarray,
-        geometry: BeamGeometry,
-        load: LoadCase,
-    ):
-        """
-        PyTensor-compatible forward model for Timoshenko beam.
-
-        Deflection formula for cantilever with tip load:
-        w(x) = w_bending(x) + w_shear(x)
-             = (P * x^2 / (6*E*I)) * (3*L - x) + (P * x) / (kappa * G * A)
-
-        where G = E / (2*(1+nu))
-        """
-        import pytensor.tensor as pt
-
-        L = geometry.length
-        I = geometry.moment_of_inertia
-        A = geometry.area
-        P = load.point_load
-        kappa = 5.0 / 6.0  # Shear correction factor for rectangular section
-
-        E = params.get("elastic_modulus", 210e9)
-        nu = params.get("poisson_ratio", 0.3)
-
-        x_t = pt.as_tensor_variable(x)
-
-        # Bending contribution (same as Euler-Bernoulli, negative for downward)
-        EI = E * I
-        w_bending = -(P * x_t**2 / (6 * EI)) * (3 * L - x_t)
-
-        # Shear contribution (Timoshenko correction, also negative)
-        G = E / (2 * (1 + nu))
-        w_shear = -(P * x_t) / (kappa * G * A)
-
-        return w_bending + w_shear
 
     def _pytensor_forward_normalized(
         self,
@@ -1172,76 +1005,4 @@ def create_timoshenko_priors() -> List[PriorConfig]:
             },
         )
     )
-    return priors
-
-
-def create_geometric_priors(
-    true_height: float,
-    height_uncertainty: float = 0.02,
-) -> List[PriorConfig]:
-    """
-    Create priors including geometric parameter (height) calibration.
-
-    This allows the model to learn geometric parameters from data,
-    which is useful when geometry is uncertain (e.g., corrosion, damage).
-
-    Args:
-        true_height: Nominal beam height [m]
-        height_uncertainty: Relative uncertainty in height (default 2%)
-
-    Returns:
-        List of PriorConfig objects including height prior
-    """
-    priors = create_default_priors()
-    priors.append(
-        PriorConfig(
-            param_name="height_factor",
-            distribution="normal",
-            params={
-                "mu": 1.0,  # Factor multiplying nominal height
-                "sigma": height_uncertainty,  # 2% uncertainty
-            },
-        )
-    )
-    return priors
-
-
-def create_full_priors(
-    true_height: float,
-    include_poisson: bool = True,
-    include_geometry: bool = False,
-    height_uncertainty: float = 0.02,
-) -> List[PriorConfig]:
-    """
-    Create comprehensive priors for full calibration.
-
-    Args:
-        true_height: Nominal beam height [m]
-        include_poisson: Include Poisson ratio (for Timoshenko)
-        include_geometry: Include geometric parameters
-        height_uncertainty: Relative uncertainty in height
-
-    Returns:
-        List of PriorConfig objects
-    """
-    priors = create_default_priors()
-
-    if include_poisson:
-        priors.append(
-            PriorConfig(
-                param_name="poisson_ratio",
-                distribution="normal",
-                params={"mu": 0.3, "sigma": 0.03},
-            )
-        )
-
-    if include_geometry:
-        priors.append(
-            PriorConfig(
-                param_name="height_factor",
-                distribution="normal",
-                params={"mu": 1.0, "sigma": height_uncertainty},
-            )
-        )
-
     return priors

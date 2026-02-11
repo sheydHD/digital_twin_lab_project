@@ -509,38 +509,3 @@ def compute_bayes_factor_bridge(
     )
 
     return log_bf, combined_se, result1, result2
-
-
-def quick_harmonic_mean_estimate(trace: az.InferenceData) -> float:
-    """
-    Quick harmonic mean estimate of marginal likelihood.
-
-    WARNING: This estimator has high (potentially infinite) variance.
-    Use bridge sampling for reliable estimates.
-
-    Included for backwards compatibility and quick checks.
-
-    Args:
-        trace: ArviZ InferenceData with log_likelihood group
-
-    Returns:
-        Log marginal likelihood estimate
-    """
-    if "log_likelihood" not in trace.groups():
-        raise ValueError("Trace must have log_likelihood group")
-
-    # Sum log-likelihoods across observations
-    log_lik_vars = list(trace.log_likelihood.data_vars)
-    if not log_lik_vars:
-        raise ValueError("No log-likelihood variables found")
-
-    # Use first log-likelihood variable (typically "y_obs")
-    log_lik = trace.log_likelihood[log_lik_vars[0]].values.sum(axis=-1).flatten()
-
-    # Harmonic mean estimator with numerical stability
-    neg_log_lik = -log_lik
-    n = len(neg_log_lik)
-    log_mean_exp = special.logsumexp(neg_log_lik) - np.log(n)
-    log_ml = -log_mean_exp
-
-    return float(log_ml)

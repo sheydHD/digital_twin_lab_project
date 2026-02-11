@@ -233,6 +233,7 @@ class BayesianHyperparameterOptimizer:
                         target_accept=target_accept,
                     )
                     eb_result = eb_cal.calibrate(dataset)
+                    eb_result.marginal_likelihood_estimate = eb_cal.compute_marginal_likelihood()
 
                     # Calibrate Timoshenko
                     timo_cal = TimoshenkoCalibrator(
@@ -243,10 +244,11 @@ class BayesianHyperparameterOptimizer:
                         target_accept=target_accept,
                     )
                     timo_result = timo_cal.calibrate(dataset)
+                    timo_result.marginal_likelihood_estimate = timo_cal.compute_marginal_likelihood()
 
-                    # Compare models
+                    # Compare models using bridge sampling marginal likelihoods
                     comparison = self.selector.compare_models(
-                        eb_result, timo_result, use_marginal_likelihood=False
+                        eb_result, timo_result
                     )
 
                     log_bf = comparison.log_bayes_factor

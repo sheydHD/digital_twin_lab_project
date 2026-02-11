@@ -130,10 +130,10 @@ format-check: check-env
 
 # Generate detailed analysis figures
 figures: check-env
-	@echo "Generating detailed analysis figures..."
+	@echo "Generating analysis figures..."
 	$(VENV_PYTHON) examples/detailed_analysis.py
 	$(VENV_PYTHON) examples/parameter_analysis.py
-	@echo "Figures saved to outputs/figures/detailed/"
+	@echo "Figures saved to outputs/figures/"
 
 # Quick demo with visualizations
 demo: check-env

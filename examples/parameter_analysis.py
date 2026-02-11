@@ -20,7 +20,7 @@ plt.rcParams.update({
     'figure.dpi': 150,
 })
 
-OUTPUT_DIR = Path("outputs/figures/detailed")
+OUTPUT_DIR = Path("outputs/figures")
 DATA_DIR = Path("outputs/data")
 
 # True value used in synthetic data generation
@@ -58,7 +58,6 @@ def plot_parameter_recovery():
         results = json.load(f)
 
     aspect_ratios = results["aspect_ratios"]
-    results["log_bayes_factors"]
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
@@ -194,165 +193,12 @@ def plot_parameter_recovery():
     print("✓ Created parameter_recovery_analysis.png")
 
 
-def plot_convergence_summary():
-    """
-    Create MCMC convergence diagnostics summary.
-    """
-    # This would normally use actual trace data
-    # Creating illustrative visualization
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-
-    # Plot 1: R-hat values (should all be < 1.01)
-    ax1 = axes[0, 0]
-
-    # Simulate R-hat values (good convergence)
-    aspect_ratios = [5, 8, 10, 12, 15, 20, 30, 50, 60, 70, 100]
-    np.random.seed(123)
-    rhat_eb = 1.0 + np.abs(np.random.normal(0, 0.003, len(aspect_ratios)))
-    rhat_timo = 1.0 + np.abs(np.random.normal(0, 0.004, len(aspect_ratios)))
-
-    x = np.arange(len(aspect_ratios))
-    width = 0.35
-
-    ax1.bar(x - width/2, rhat_eb, width, label='E-B', color='steelblue', edgecolor='black')
-    ax1.bar(x + width/2, rhat_timo, width, label='Timoshenko', color='coral', edgecolor='black')
-    ax1.axhline(1.01, color='red', linestyle='--', linewidth=2, label='Threshold (1.01)')
-    ax1.axhline(1.0, color='green', linestyle='-', linewidth=1, alpha=0.5)
-
-    ax1.set_xlabel('Aspect Ratio (L/h)')
-    ax1.set_ylabel('R-hat')
-    ax1.set_title('Convergence: R-hat (E parameter)', fontweight='bold')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels([f'{r:.0f}' for r in aspect_ratios], rotation=45)
-    ax1.set_ylim(0.99, 1.02)
-    ax1.legend(loc='upper right')
-    ax1.grid(True, alpha=0.3)
-
-    # Plot 2: ESS (Effective Sample Size)
-    ax2 = axes[0, 1]
-
-    # Simulate ESS (should be > 400 for reliable estimates)
-    ess_eb = np.random.uniform(800, 2000, len(aspect_ratios))
-    ess_timo = np.random.uniform(600, 1800, len(aspect_ratios))
-
-    ax2.bar(x - width/2, ess_eb, width, label='E-B', color='steelblue', edgecolor='black')
-    ax2.bar(x + width/2, ess_timo, width, label='Timoshenko', color='coral', edgecolor='black')
-    ax2.axhline(400, color='red', linestyle='--', linewidth=2, label='Min threshold (400)')
-
-    ax2.set_xlabel('Aspect Ratio (L/h)')
-    ax2.set_ylabel('Effective Sample Size')
-    ax2.set_title('Sampling Efficiency: ESS', fontweight='bold')
-    ax2.set_xticks(x)
-    ax2.set_xticklabels([f'{r:.0f}' for r in aspect_ratios], rotation=45)
-    ax2.legend(loc='upper right')
-    ax2.grid(True, alpha=0.3)
-
-    # Plot 3: Divergences (should be 0)
-    ax3 = axes[1, 0]
-
-    divergences = np.zeros(len(aspect_ratios))  # All zero after normalization
-
-    ax3.bar(aspect_ratios, divergences, color='green', edgecolor='black', width=3)
-    ax3.set_xlabel('Aspect Ratio (L/h)')
-    ax3.set_ylabel('Number of Divergences')
-    ax3.set_title('Sampler Health: Divergences (0 = Good)', fontweight='bold')
-    ax3.set_ylim(0, 5)
-    ax3.grid(True, alpha=0.3)
-
-    # Annotate
-    ax3.text(0.5, 0.5, '✓ All Zero!\nSampling is\nHealthy', transform=ax3.transAxes,
-            ha='center', va='center', fontsize=16, color='green', fontweight='bold')
-
-    # Plot 4: Step sizes
-    ax4 = axes[1, 1]
-
-    step_sizes = np.random.uniform(0.25, 0.55, len(aspect_ratios))
-
-    ax4.plot(aspect_ratios, step_sizes, 'go-', markersize=10, linewidth=2)
-    ax4.axhline(0.65, color='orange', linestyle='--', label='Upper bound')
-    ax4.axhline(0.1, color='orange', linestyle='--', label='Lower bound')
-    ax4.fill_between([0, 120], 0.1, 0.65, alpha=0.2, color='green', label='Healthy range')
-
-    ax4.set_xlabel('Aspect Ratio (L/h)')
-    ax4.set_ylabel('Average Step Size')
-    ax4.set_title('NUTS Step Size (Healthy: 0.1-0.65)', fontweight='bold')
-    ax4.set_xlim(0, 110)
-    ax4.legend(loc='upper right')
-    ax4.grid(True, alpha=0.3)
-
-    plt.suptitle('MCMC Convergence Diagnostics Summary', fontsize=14, fontweight='bold', y=1.02)
-    plt.tight_layout()
-    fig.savefig(OUTPUT_DIR / "convergence_diagnostics.png")
-    plt.close()
-    print("✓ Created convergence_diagnostics.png")
-
-
-def plot_methodology_flowchart():
-    """
-    Create a visual flowchart of the methodology.
-    """
-    fig, ax = plt.subplots(figsize=(14, 10))
-    ax.axis('off')
-
-    # Define boxes
-    boxes = [
-        # (x, y, width, height, text, color)
-        (0.1, 0.85, 0.25, 0.1, "1. SYNTHETIC DATA\nGENERATION\n(FEM Reference)", 'lightblue'),
-        (0.1, 0.65, 0.25, 0.1, "Timoshenko FEM\n+ 2% Gaussian Noise", 'lightcyan'),
-
-        (0.4, 0.75, 0.2, 0.1, "2. DATA\nGenerated for\n11 L/h ratios", 'lightyellow'),
-
-        (0.65, 0.85, 0.25, 0.1, "3. BAYESIAN\nCALIBRATION", 'lightgreen'),
-        (0.65, 0.65, 0.25, 0.1, "PyMC + NUTS\nNormalized parameters\n1500 samples, 4 chains", 'palegreen'),
-
-        (0.1, 0.4, 0.35, 0.12, "4. MODEL COMPARISON\n\nWAIC / LOO-CV\nBayes Factors\nBridge Sampling", 'lightsalmon'),
-
-        (0.55, 0.4, 0.35, 0.12, "5. EVIDENCE ANALYSIS\n\nJeffreys' Scale\nTransition Identification\nUncertainty Quantification", 'plum'),
-
-        (0.25, 0.15, 0.5, 0.12, "6. DIGITAL TWIN GUIDELINES\n\nL/h < 10: Timoshenko | L/h > 20: E-B | Transition: ~19", 'gold'),
-    ]
-
-    for (x, y, w, h, text, color) in boxes:
-        rect = plt.Rectangle((x, y), w, h, facecolor=color, edgecolor='black', linewidth=2)
-        ax.add_patch(rect)
-        ax.text(x + w/2, y + h/2, text, ha='center', va='center', fontsize=9, fontweight='bold')
-
-    # Draw arrows
-    arrows = [
-        ((0.225, 0.85), (0.225, 0.75)),  # Data gen to data
-        ((0.35, 0.69), (0.4, 0.75)),  # To data box
-        ((0.35, 0.9), (0.4, 0.8)),  # To data box
-        ((0.6, 0.8), (0.65, 0.85)),  # To calibration
-        ((0.775, 0.65), (0.775, 0.52)),  # To evidence
-        ((0.275, 0.65), (0.275, 0.52)),  # To comparison
-        ((0.45, 0.4), (0.55, 0.4)),  # Comparison to evidence
-        ((0.5, 0.4), (0.5, 0.27)),  # To guidelines
-    ]
-
-    for (start, end) in arrows:
-        ax.annotate('', xy=end, xytext=start,
-                   arrowprops={'arrowstyle': '->', 'lw': 2, 'color': 'gray'})
-
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.set_title('Methodology Flowchart: Bayesian Model Selection Pipeline',
-                fontsize=14, fontweight='bold', pad=20)
-
-    plt.tight_layout()
-    fig.savefig(OUTPUT_DIR / "methodology_flowchart.png")
-    plt.close()
-    print("✓ Created methodology_flowchart.png")
-
-
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("Generating Additional Analysis Figures")
+    print("Generating Parameter Analysis Figures")
     print("="*60 + "\n")
 
     plot_parameter_recovery()
-    plot_convergence_summary()
-    plot_methodology_flowchart()
 
-    print("\n✓ All additional figures created!")
+    print("\n✓ All figures created!")
     print(f"  Output directory: {OUTPUT_DIR}")

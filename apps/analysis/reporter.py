@@ -79,9 +79,7 @@ class ResultsReporter:
         report.append("MODEL COMPARISON METRICS")
         report.append("-" * 40)
         if result.waic is not None:
-            report.append(f"WAIC: {result.waic:.2f}")
-        if result.loo is not None:
-            report.append(f"LOO-CV: {result.loo:.2f}")
+            report.append(f"WAIC (elpd_waic): {result.waic:.2f}")
 
         # Convergence diagnostics
         if result.convergence_diagnostics:
@@ -143,8 +141,6 @@ class ResultsReporter:
         report.append("-" * 40)
         if comparison.waic_difference is not None:
             report.append(f"ΔWAIC (M1 - M2): {comparison.waic_difference:.2f}")
-        if comparison.loo_difference is not None:
-            report.append(f"ΔLOO (M1 - M2): {comparison.loo_difference:.2f}")
         report.append("")
 
         report.append("RECOMMENDATION")
@@ -351,57 +347,6 @@ class ResultsReporter:
         report.append("GUIDELINE")
         report.append("-" * 40)
         report.append(summary.get("guideline", "No guideline available"))
-
-        report_text = "\n".join(report)
-
-        filepath = self.output_dir / filename
-        with open(filepath, "w") as f:
-            f.write(report_text)
-
-        return report_text
-
-    def generate_optimization_report(
-        self,
-        optimization_results: Dict,
-        filename: str = "optimization_results.txt",
-    ) -> str:
-        """
-        Generate hyperparameter optimization report.
-
-        Args:
-            optimization_results: Results from Optuna optimization
-            filename: Output filename
-
-        Returns:
-            Report text
-        """
-        report = []
-        report.append("=" * 70)
-        report.append("HYPERPARAMETER OPTIMIZATION RESULTS")
-        report.append("=" * 70)
-        report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        report.append("")
-
-        report.append("OPTIMIZATION SUMMARY")
-        report.append("-" * 40)
-        report.append(f"Best score: {optimization_results.get('best_score', 'N/A'):.4f}")
-        report.append(f"Trials completed: {optimization_results.get('n_trials', 'N/A')}")
-        report.append("")
-
-        report.append("BEST PARAMETERS")
-        report.append("-" * 40)
-        best_params = optimization_results.get("best_params", {})
-        for param, value in best_params.items():
-            if isinstance(value, float):
-                report.append(f"  {param}: {value:.6g}")
-            else:
-                report.append(f"  {param}: {value}")
-
-        report.append("")
-        report.append("USAGE")
-        report.append("-" * 40)
-        report.append("To use optimized parameters, update configs/default_config.yaml")
-        report.append("or pass them to run_calibration_with_optimized_params()")
 
         report_text = "\n".join(report)
 

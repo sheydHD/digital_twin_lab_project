@@ -195,29 +195,6 @@ class TimoshenkoBeam(BaseBeamModel):
 
         return psi
 
-    def compute_shear_angle(
-        self,
-        x: np.ndarray,
-        load: LoadCase,
-    ) -> np.ndarray:
-        """
-        Compute shear angle γ = V/(κGA).
-
-        This represents the additional rotation due to shear deformation.
-        In Timoshenko theory: dw/dx = ψ + γ
-
-        Args:
-            x: Positions along the beam [m]
-            load: Load case definition
-
-        Returns:
-            Shear angle at each position [rad]
-
-        """
-        V = self.compute_shear(x, load)
-        kGA = self.shear_rigidity
-        return V / kGA
-
     def compute_strain(
         self,
         x: np.ndarray,
@@ -252,28 +229,6 @@ class TimoshenkoBeam(BaseBeamModel):
         strain = -y * M / (E * I)
 
         return strain
-
-    def compute_shear_strain(
-        self,
-        x: np.ndarray,
-        load: LoadCase,
-    ) -> np.ndarray:
-        """
-        Compute shear strain γ_xy in Timoshenko beam.
-
-        For Timoshenko beam, the average shear strain is: γ = V / (κGA)
-
-        Args:
-            x: Positions along the beam [m]
-            load: Load case definition
-
-        Returns:
-            Shear strain at each position [-]
-
-        """
-        V = self.compute_shear(x, load)
-        kGA = self.shear_rigidity
-        return V / kGA
 
     def compute_natural_frequencies(
         self,
@@ -402,35 +357,3 @@ class TimoshenkoBeam(BaseBeamModel):
             return w_shear / (w_bend + w_shear)
 
         return 0.0  # Pure moment loading has no shear deformation
-
-    def compare_with_euler_bernoulli(self, load: LoadCase) -> dict:
-        """
-        Compare Timoshenko predictions with Euler-Bernoulli.
-
-        Returns:
-            Dictionary with comparison metrics
-        """
-        from .euler_bernoulli import EulerBernoulliBeam
-
-        eb_beam = EulerBernoulliBeam(self.geometry, self.material)
-
-        x = np.linspace(0, self.geometry.length, 100)
-
-        eb_beam.compute_deflection(x, load)
-        self.compute_deflection(x, load)
-
-        tip_eb = eb_beam.tip_deflection(load)
-        tip_t = self.tip_deflection(load)
-
-        freq_eb = eb_beam.compute_natural_frequencies(5)
-        freq_t = self.compute_natural_frequencies(5)
-
-        return {
-            "tip_deflection_eb": tip_eb,
-            "tip_deflection_timoshenko": tip_t,
-            "deflection_ratio": tip_t / tip_eb if tip_eb != 0 else 1.0,
-            "shear_deformation_contribution": self.shear_deformation_ratio(load),
-            "frequency_ratios": freq_t / freq_eb,
-            "aspect_ratio": self.geometry.aspect_ratio,
-            "shear_parameter": self.shear_parameter,
-        }

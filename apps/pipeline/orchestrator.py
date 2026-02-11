@@ -248,9 +248,7 @@ class PipelineOrchestrator:
                 target_accept=target_accept,
             )
             eb_result = eb_calibrator.calibrate(dataset)
-            eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood(
-                method="bridge_sampling"
-            )
+            eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood()
             self.eb_results.append(eb_result)
 
             # Timoshenko calibration
@@ -262,9 +260,7 @@ class PipelineOrchestrator:
                 target_accept=target_accept,
             )
             timo_result = timo_calibrator.calibrate(dataset)
-            timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood(
-                method="bridge_sampling"
-            )
+            timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood()
             self.timo_results.append(timo_result)
 
         console.print(f"\n  Calibrated {len(self.eb_results)} model pairs")
@@ -437,9 +433,7 @@ class PipelineOrchestrator:
                 target_accept=target_accept,
             )
             eb_result = eb_calibrator.calibrate(dataset)
-            eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood(
-                method="bridge_sampling"
-            )
+            eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood()
             self.eb_results.append(eb_result)
 
             # Timoshenko calibration
@@ -451,9 +445,7 @@ class PipelineOrchestrator:
                 target_accept=target_accept,
             )
             timo_result = timo_calibrator.calibrate(dataset)
-            timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood(
-                method="bridge_sampling"
-            )
+            timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood()
             self.timo_results.append(timo_result)
 
         console.print(f"\n  Calibrated {len(self.eb_results)} model pairs with optimized params")
@@ -473,7 +465,7 @@ class PipelineOrchestrator:
         # Aspect ratio study plot
         self.visualizer.plot_aspect_ratio_study(self.study_results)
 
-        # Deflection error plot
+        # Deflection error plot (shear contribution)
         self.visualizer.plot_deflection_error(
             aspect_ratios=self.aspect_ratios,
             base_length=self.base_length,
@@ -481,8 +473,9 @@ class PipelineOrchestrator:
             load=self.load,
         )
 
-        # Individual beam comparisons
-        for dataset in self.datasets[:3]:  # First 3 only to save time
+        # Single beam comparison (first dataset as representative)
+        if self.datasets:
+            dataset = self.datasets[0]
             L_h = dataset.geometry.aspect_ratio
             self.visualizer.plot_beam_comparison(
                 geometry=dataset.geometry,
@@ -501,55 +494,24 @@ class PipelineOrchestrator:
             material=self.material,
         )
 
-        # Prior distributions
-        eb_priors = create_default_priors()
-        timo_priors = create_timoshenko_priors()
-        self.visualizer.plot_prior_distributions(
-            eb_priors, filename="prior_distributions_eb.png"
-        )
-        self.visualizer.plot_prior_distributions(
-            timo_priors, filename="prior_distributions_timo.png"
-        )
+        # Model comparison for first pair
+        if self.comparisons:
+            self.visualizer.plot_model_comparison(self.comparisons[0])
 
-        # Posterior distributions and prior-posterior comparison
+        # Prior vs posterior overlay (one per model)
         if self.eb_results and self.timo_results:
-            # Plot for first dataset as representative example
-            eb_result = self.eb_results[0]
-            timo_result = self.timo_results[0]
+            eb_priors = create_default_priors()
+            timo_priors = create_timoshenko_priors()
             L_h = self.aspect_ratios[0]
 
-            # Posteriors only
-            self.visualizer.plot_posterior_distributions(
-                eb_result, filename=f"posterior_eb_Lh_{L_h:.0f}.png"
-            )
-            self.visualizer.plot_posterior_distributions(
-                timo_result, filename=f"posterior_timo_Lh_{L_h:.0f}.png"
-            )
-
-            # Prior vs posterior overlays
             self.visualizer.plot_prior_posterior_comparison(
-                eb_result, eb_priors,
+                self.eb_results[0], eb_priors,
                 filename=f"prior_posterior_eb_Lh_{L_h:.0f}.png",
             )
             self.visualizer.plot_prior_posterior_comparison(
-                timo_result, timo_priors,
+                self.timo_results[0], timo_priors,
                 filename=f"prior_posterior_timo_Lh_{L_h:.0f}.png",
             )
-
-            # Also plot for a mid-range and slender case if available
-            if len(self.eb_results) > mid_idx:
-                L_h_mid = self.aspect_ratios[mid_idx]
-                self.visualizer.plot_prior_posterior_comparison(
-                    self.eb_results[mid_idx], eb_priors,
-                    filename=f"prior_posterior_eb_Lh_{L_h_mid:.0f}.png",
-                )
-                self.visualizer.plot_prior_posterior_comparison(
-                    self.timo_results[mid_idx], timo_priors,
-                    filename=f"prior_posterior_timo_Lh_{L_h_mid:.0f}.png",
-                )
-
-        # Summary report figure
-        self.visualizer.create_summary_report(self.study_results)
 
     def generate_report(self) -> Dict:
         """
@@ -644,13 +606,3 @@ class PipelineOrchestrator:
         if "digital_twin_recommendation" in guidelines:
             console.print("\n[bold cyan]Digital Twin Recommendation:[/bold cyan]")
             console.print(guidelines["digital_twin_recommendation"])
-
-    def load_previous_results(self, results_dir: Path) -> None:
-        """
-        Load results from a previous run.
-
-        Args:
-            results_dir: Directory containing previous results
-
-        """
-        raise NotImplementedError("Results loading not yet implemented")

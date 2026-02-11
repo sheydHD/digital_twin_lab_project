@@ -11,10 +11,14 @@
             "id": "a5f3ea1e44cf441b",
             "type": "leaf",
             "state": {
-              "type": "empty",
-              "state": {},
+              "type": "markdown",
+              "state": {
+                "file": "docs/After meeting 04_02_2026.md",
+                "mode": "source",
+                "source": false
+              },
               "icon": "lucide-file",
-              "title": "New tab"
+              "title": "After meeting 04_02_2026"
             }
           }
         ]
@@ -179,15 +183,19 @@
       "bases:Create new base": false
     }
   },
-  "active": "a5f3ea1e44cf441b",
+  "active": "89ea2090d5d2fb61",
   "lastOpenFiles": [
+    "docs/ARCHITECTURE.md",
+    "docs/DEVELOPMENT.md",
+    "docs/API.md",
+    "docs/internal/BAYESIAN_AUDIT_ANALYSIS.md",
+    "docs/After meeting 04_02_2026.md",
     "apps/py.typed",
     "tests/__pycache__/test_normalization.cpython-312-pytest-9.0.2.pyc",
     "tests/__pycache__/test_bayesian.cpython-312-pytest-9.0.2.pyc",
     "tests/test_normalization.py",
     "tests/test_bayesian.py",
     "docs/IMPLEMENTATION_PLAN.md",
-    "docs/internal/BAYESIAN_AUDIT_ANALYSIS.md",
     "docs/internal/IMPLEMENTATION_PLAN.md",
     "docs/internal",
     "apps/bayesian/__pycache__/hyperparameter_optimization.cpython-312.pyc.125791560025072",
@@ -204,7 +212,6 @@
     "outputs/figures/detailed/evidence_strength_bars.png",
     "outputs/figures/detailed",
     "examples/detailed_analysis.py",
-    "apps/bayesian/__pycache__/bridge_sampling.cpython-312.pyc",
     "docs/BAYESIAN_AUDIT_ANALYSIS.md",
     "README.md",
     "EXPLANATION.md"

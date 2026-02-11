@@ -3,60 +3,40 @@ layout: default
 title: Home
 ---
 
-# 🏗️ Digital Twin Lab
+# bayesian model selection for beam theory in digital twins
 
-## Bayesian Model Selection for Beam Theory in Structural Health Monitoring
+RWTH Aachen University — Antoni Dudij & Maksim Feldmann
 
-**RWTH Aachen University - Antoni Dudij & Maksim Feldmann**
+## documentation
 
----
-
-## 📚 Documentation
-
-| Document | Description |
+| document | description |
 |----------|-------------|
-| [Getting Started](docs/GETTING_STARTED.md) | Installation, setup, and first run |
-| [Explanation](docs/EXPLANATION.md) | Plain-English project guide |
-| [Architecture](docs/ARCHITECTURE.md) | System design and patterns |
-| [API Reference](docs/API.md) | Complete API documentation |
-| [Development Guide](docs/DEVELOPMENT.md) | Dev setup and best practices |
-| [Documentation Index](docs/INDEX.md) | Complete navigation |
+| [getting started](docs/GETTING_STARTED.md) | installation, setup, first run |
+| [explanation](docs/EXPLANATION.md) | plain-language project description |
+| [architecture](docs/ARCHITECTURE.md) | system design and data flow |
+| [API reference](docs/API.md) | class and function documentation |
+| [development](docs/DEVELOPMENT.md) | dev environment and testing |
+| [documentation index](docs/INDEX.md) | topic-based navigation |
 
----
+## project resources
 
-## 📋 Project Resources
-
-| Resource | Description |
+| resource | description |
 |----------|-------------|
-| [Contributing](CONTRIBUTING.md) | How to contribute |
-| [Code of Conduct](CODE_OF_CONDUCT.md) | Community standards |
-| [Authors](AUTHORS.md) | Project developers |
-| [Changelog](CHANGELOG.md) | Version history |
-| [Security](SECURITY.md) | Security policy |
-| [License](LICENSE) | MIT License |
+| [contributing](CONTRIBUTING.md) | contribution guidelines |
+| [code of conduct](CODE_OF_CONDUCT.md) | community standards |
+| [authors](AUTHORS.md) | developers |
+| [changelog](CHANGELOG.md) | version history |
+| [security](SECURITY.md) | security policy |
+| [license](LICENSE) | MIT license |
 
----
+## links
 
-## 🔗 Quick Links
+- repository: [sheydHD/digital_twin_lab_project](https://github.com/sheydHD/digital_twin_lab_project)
+- issues: [report a bug](https://github.com/sheydHD/digital_twin_lab_project/issues)
 
-- **GitHub Repository**: [sheydHD/digital_twin_lab_project](https://github.com/sheydHD/digital_twin_lab_project)
-- **Issues**: [Report a bug](https://github.com/sheydHD/digital_twin_lab_project/issues)
-- **Discussions**: [Ask questions](https://github.com/sheydHD/digital_twin_lab_project/discussions)
+## key results
 
----
-
-## Key Results
-
-The project successfully demonstrates **physics-aligned model selection**:
-
-- **Thick beams (L/h ≤ 15)**: Timoshenko strongly preferred
-- **Transition region (L/h ≈ 19.2)**: Model preference switches
-- **Slender beams (L/h = 20, 30)**: Euler-Bernoulli preferred
-- **Very slender beams (L/h = 50)**: Models become indistinguishable
-
----
-
-<p align="center">
-Made with ❤️ by Antoni Dudij & Maksim Feldmann<br>
-<em>RWTH Aachen University - Digital Twins Lab</em>
-</p>
+- thick beams (L/h <= 15): Timoshenko strongly preferred
+- transition at L/h ~ 19.2
+- slender beams (L/h >= 20): Euler-Bernoulli preferred
+- very slender beams (L/h = 50): models indistinguishable

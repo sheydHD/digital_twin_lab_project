@@ -55,17 +55,19 @@ bayesian:
   target_accept: 0.95 # Target acceptance rate for NUTS
   random_seed: 42     # Random seed for reproducibility
   
-  # Data normalization settings (NEW)
+  # Data normalization settings
   # Normalizes quantities to O(1) for numerical stability
   normalization:
     enabled: true           # Enable data normalization for stable MCMC
     method: "max_abs"       # Method: "max_abs", "std", or "range"
   
-  # Evidence estimation method (NEW)
-  # "waic" = fast but approximate, "bridge" = accurate but slower
-  evidence_method: "waic"
+  # Evidence estimation method
+  # Bridge sampling (Meng & Wong, 1996) is used exclusively.
+  # It computes the true marginal likelihood p(y|M) for Bayes factor computation.
+  # WAIC is computed for diagnostics only.
+  evidence_method: "bridge_sampling"
 
-# Convergence diagnostics settings (NEW)
+# Convergence diagnostics settings
 # These thresholds determine when MCMC results are acceptable
 convergence:
   # R-hat thresholds (Gelman-Rubin statistic)

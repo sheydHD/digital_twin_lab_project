@@ -1,128 +1,108 @@
-# Parameter explanation
+# parameters
 
-## 1. Calibrated Parameters
+## 1. calibrated parameters
 
 **Euler-Bernoulli** — 2 parameters:
 
-| Parameter | Symbol | True value | Role |
+| parameter | symbol | true value | role |
 |-----------|--------|------------|------|
-| Elastic modulus | E | 210 GPa | Stiffness. Deflection ∝ 1/E |
-| Observation noise | σ | ~0.05% of signal | Measurement uncertainty |
+| elastic modulus | E | 210 GPa | stiffness, deflection proportional to 1/E |
+| observation noise | sigma | ~0.05% of signal | measurement uncertainty |
 
 **Timoshenko** — 3 parameters:
 
-| Parameter | Symbol | True value | Role |
+| parameter | symbol | true value | role |
 |-----------|--------|------------|------|
-| Elastic modulus | E | 210 GPa | Stiffness |
-| Poisson's ratio | ν | 0.3 | Controls shear modulus G = E/(2(1+ν)) |
-| Observation noise | σ | ~0.05% of signal | Measurement uncertainty |
+| elastic modulus | E | 210 GPa | stiffness |
+| Poisson's ratio | nu | 0.3 | controls shear modulus G = E/(2(1+nu)) |
+| observation noise | sigma | ~0.05% of signal | measurement uncertainty |
 
-Timoshenko has 1 extra parameter (ν). WAIC penalizes this extra complexity (Occam's razor).
+Timoshenko has 1 extra parameter (nu). Bridge sampling marginal likelihoods naturally penalize this extra complexity when it doesn't improve fit (Occam's razor).
 
-### Calibration Data Types
+### calibration data types
 
-The framework supports calibration on two data types:
-
-| Data type | Observable | Forward model | Use case |
+| data type | observable | forward model | use case |
 |-----------|-----------|---------------|----------|
-| **Displacement** (default) | $w(x_i)$ | Analytical deflection formula | Primary calibration — most informative |
-| **Strain** | $\varepsilon(x_i)$ | $\varepsilon = -\frac{h}{2} \cdot \frac{P(L - x)}{EI}$ | Surface strain gauges — validates E independently |
+| displacement (default) | w(x_i) | analytical deflection formula | primary calibration |
+| strain | epsilon(x_i) | epsilon = -(h/2) * P(L-x) / (EI) | surface strain gauges |
 
-Both EB and Timoshenko share the same bending-strain formula because shear deformation does not affect axial strain (it only adds rigid-body translation, not curvature).
+Both EB and Timoshenko share the same bending-strain formula because shear deformation does not affect axial strain.
 
----
+## 2. priors and posteriors
 
-## 2. Priors and Posteriors
+### priors
 
-### Priors
+Config defines LogNormal for E, but code normalizes to O(1) before sampling:
 
-Config file defines LogNormal for E, but code normalizes everything to O(1) before sampling:
+| parameter | config definition | actual MCMC prior (normalized) |
+|-----------|-------------------|-------------------------------|
+| E | LogNormal(mu=26.07, sigma=0.05) | Normal(mu=1.0, sigma=0.05) |
+| nu | Normal(mu=0.3, sigma=0.03) | Normal(mu=0.3, sigma=0.03) |
+| sigma | HalfNormal(sigma=1e-6) | HalfNormal(sigma=1.0) |
 
-| Parameter | Config definition | Actual MCMC prior (normalized space) |
-|-----------|-------------------|--------------------------------------|
-| E | LogNormal(μ=26.07, σ=0.05) | Normal(μ=1.0, σ=0.05) |
-| ν | Normal(μ=0.3, σ=0.03) | Normal(μ=0.3, σ=0.03) |
-| σ | HalfNormal(σ=1e-6) | HalfNormal(σ=1.0) |
+Why the difference: E is divided by E_scale=210e9, sigma is divided by displacement_scale. This puts all values near 1.0 for stable MCMC.
 
-Why the difference: E is divided by E_scale=210e9, σ is divided by displacement_scale. This puts all values near 1.0 for stable MCMC.
+### posteriors
 
-### Posteriors
-
-From calibration runs (all 11 L/h ratios):
+From calibration runs (all L/h ratios):
 - E recovers to ~210 GPa consistently
-- R̂ = 1.002–1.003 (converged)
-- ESS = 1250–1650 (sufficient)
+- R-hat = 1.002-1.003 (converged)
+- ESS = 1250-1650 (sufficient)
 
----
+## 3. sign convention
 
-## 3. Sign Convention
-
-| Quantity | Convention |
+| quantity | convention |
 |----------|-----------|
-| Load P | Positive = downward |
-| Deflection w | Negative = downward (positive P → negative w) |
-| y-coordinate | Positive = downward from neutral axis |
-| Strain ε | ε = −y·M/(EI). Tension at bottom for positive moment |
-| Log Bayes factor | log BF = log p(y\|EB) − log p(y\|Timo) |
-| Negative log BF | → Favors Timoshenko |
-| Positive log BF | → Favors Euler-Bernoulli |
-| \|log BF\| < 0.5 | → Inconclusive |
+| load P | positive = downward |
+| deflection w | negative = downward (positive P -> negative w) |
+| y-coordinate | positive = downward from neutral axis |
+| strain epsilon | epsilon = -y * M/(EI). Tension at bottom for positive moment |
+| log Bayes factor | log BF = log p(y|EB) - log p(y|Timo) |
+| negative log BF | favors Timoshenko |
+| positive log BF | favors Euler-Bernoulli |
+| |log BF| < 0.5 | inconclusive |
 
----
+## 4. distributions used
 
-## 4. Distributions Used
-
-| Distribution | Where | Why |
+| distribution | where | why |
 |---|---|---|
-| Normal(1.0, 0.05) | E (normalized) | Symmetric around nominal, 5% relative uncertainty |
-| Normal(0.3, 0.03) | ν (Timoshenko) | Steel ν ∈ [0.25, 0.35], tight around known value |
-| HalfNormal(1.0) | σ (normalized) | Forces σ > 0, concentrates near zero (noise is small) |
-| Normal (likelihood) | y ~ N(w_model, σ²) | Standard Gaussian measurement noise |
+| Normal(1.0, 0.05) | E (normalized) | symmetric around nominal, 5% relative uncertainty |
+| Normal(0.3, 0.03) | nu (Timoshenko) | steel nu in [0.25, 0.35] |
+| HalfNormal(1.0) | sigma (normalized) | forces sigma > 0, concentrates near zero |
+| Normal (likelihood) | y ~ N(w_model, sigma^2) | Gaussian measurement noise |
 
----
+## 5. parametric study grid
 
-## 5. Grid Sampling (Parametric Study)
+Fixed parameters: L = 1.0 m, b = 0.1 m, P = 1000 N, E = 210 GPa, nu = 0.3, kappa = 5/6.
 
-Not MCMC grid sampling. It's a sweep over beam geometries.
+Varied: aspect ratio L/h, which sets h = L/(L/h).
 
-**Fixed parameters**:
-- Length L = 1.0 m
-- Width b = 0.1 m
-- Point load P = 1000 N
-- E = 210 GPa, ν = 0.3, κ = 5/6
-
-**Varied**: aspect ratio L/h → height h = L/(L/h)
-
-| L/h | h [m] | Beam type | Log BF | Recommendation |
+| L/h | h [m] | beam type | log BF | recommendation |
 |-----|-------|-----------|--------|----------------|
-| 5 | 0.200 | Very thick | −11.11 | Timoshenko |
-| 8 | 0.125 | Thick | −7.68 | Timoshenko |
-| 10 | 0.100 | Moderate | −4.32 | Timoshenko |
-| 12 | 0.083 | Moderate | −3.91 | Timoshenko |
-| 15 | 0.067 | Transition | −2.45 | Timoshenko |
-| 20 | 0.050 | Slender | +0.39 | Euler-Bernoulli |
-| 30 | 0.033 | Slender | +0.08 | Euler-Bernoulli |
-| 50 | 0.020 | Very slender | +0.06 | Euler-Bernoulli |
-| 60 | 0.017 | Very slender | −0.06 | Euler-Bernoulli |
-| 70 | 0.014 | Very slender | +0.18 | Euler-Bernoulli |
-| 100 | 0.010 | Very slender | −0.02 | Euler-Bernoulli |
+| 5 | 0.200 | very thick | -11.11 | Timoshenko |
+| 8 | 0.125 | thick | -7.68 | Timoshenko |
+| 10 | 0.100 | moderate | -4.32 | Timoshenko |
+| 12 | 0.083 | moderate | -3.91 | Timoshenko |
+| 15 | 0.067 | transition | -2.45 | Timoshenko |
+| 20 | 0.050 | slender | +0.39 | Euler-Bernoulli |
+| 30 | 0.033 | slender | +0.08 | Euler-Bernoulli |
+| 50 | 0.020 | very slender | +0.06 | Euler-Bernoulli |
+| 60 | 0.017 | very slender | -0.06 | Euler-Bernoulli |
+| 70 | 0.014 | very slender | +0.18 | Euler-Bernoulli |
+| 100 | 0.010 | very slender | -0.02 | Euler-Bernoulli |
 
-**Transition point**: L/h ≈ 19.3 (interpolated zero-crossing)
+Transition point: L/h ~ 19.3 (interpolated zero-crossing).
 
-Grid is denser around L/h = 10–20 to resolve the transition region precisely.
+Grid is denser around L/h = 10-20 to resolve the transition region.
 
----
+## 6. frequency analysis
 
-## 6. Frequency Analysis
+The pipeline also runs analytical natural frequency analysis for both beam theories.
 
-The pipeline also performs analytical natural frequency analysis for both beam theories.
-
-**EB natural frequency** (mode n):
+EB natural frequency (mode n):
 
 $$f_n^{EB} = \frac{\lambda_n^2}{2\pi L^2} \sqrt{\frac{EI}{\rho A}}$$
 
-**Timoshenko natural frequency** includes shear and rotary inertia corrections, which lower the natural frequencies compared to EB — especially for thick beams and higher modes.
+Timoshenko natural frequencies include shear and rotary inertia corrections that lower frequencies compared to EB, especially for thick beams and higher modes.
 
-The frequency analysis report is generated automatically and saved to `outputs/reports/frequency_analysis.txt`.
-
-**Key takeaway**: The divergence between EB and Timoshenko natural frequencies increases with mode number and decreases with L/h, consistent with the static deflection transition at L/h ≈ 19.3.
+Results saved to `outputs/reports/frequency_analysis.txt`.

@@ -200,7 +200,6 @@ class TestCalibrationResult:
             posterior_summary={"E": {"mean": 210e9}},
             log_likelihood=np.array([-100, -101, -99]),
             waic=-200.0,
-            loo=-199.0,
             convergence_diagnostics={"r_hat": {"E": 1.001}}
         )
 

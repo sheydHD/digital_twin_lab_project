@@ -224,7 +224,6 @@ class TestEdgeCases:
 
     def test_inactive_normalization(self):
         """Test that inactive normalization is identity."""
-        np.array([-1e-5, -2e-5])
         params = NormalizationParams(is_active=False)
 
         # Should return unchanged when inactive

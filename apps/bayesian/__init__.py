@@ -4,7 +4,6 @@ from apps.bayesian.bridge_sampling import (
     BridgeSampler,
     BridgeSamplingResult,
     compute_bayes_factor_bridge,
-    quick_harmonic_mean_estimate,
 )
 from apps.bayesian.calibration import (
     BayesianCalibrator,
@@ -15,8 +14,6 @@ from apps.bayesian.calibration import (
     PriorConfig,
     TimoshenkoCalibrator,
     create_default_priors,
-    create_full_priors,
-    create_geometric_priors,
     create_timoshenko_priors,
 )
 from apps.bayesian.hyperparameter_optimization import (
@@ -33,7 +30,6 @@ from apps.bayesian.model_selection import (
     ModelEvidence,
 )
 from apps.bayesian.normalization import (
-    DataNormalizer,
     NormalizationParams,
     compute_normalization_params,
     create_normalizer_from_dataset,
@@ -43,7 +39,6 @@ from apps.bayesian.normalization import (
     normalize_displacements,
     normalize_E,
     normalize_elastic_modulus,
-    validate_normalized_data,
 )
 
 __all__ = [
@@ -57,8 +52,6 @@ __all__ = [
     "ConvergenceWarning",
     "create_default_priors",
     "create_timoshenko_priors",
-    "create_geometric_priors",
-    "create_full_priors",
     # Model selection
     "BayesianModelSelector",
     "ModelComparisonResult",
@@ -70,8 +63,7 @@ __all__ = [
     "get_physical_expectations",
     "create_priors_from_params",
     "run_quick_optimization",
-    # Normalization (NEW)
-    "DataNormalizer",
+    # Normalization
     "NormalizationParams",
     "compute_normalization_params",
     "create_normalizer_from_dataset",
@@ -81,10 +73,8 @@ __all__ = [
     "denormalize_elastic_modulus",
     "normalize_E",
     "denormalize_E",
-    "validate_normalized_data",
-    # Bridge Sampling (NEW)
+    # Bridge Sampling
     "BridgeSampler",
     "BridgeSamplingResult",
     "compute_bayes_factor_bridge",
-    "quick_harmonic_mean_estimate",
 ]

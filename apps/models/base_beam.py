@@ -249,35 +249,6 @@ class BaseBeamModel(ABC):
 
         return V_point + V_dist
 
-    def get_parameter_dict(self) -> dict:
-        """
-        Return a dictionary of model parameters for Bayesian calibration.
-
-        Returns:
-            Dictionary with parameter names and current values
-        """
-        return {
-            "elastic_modulus": self.material.elastic_modulus,
-            "shear_modulus": self.material.shear_modulus,
-            "density": self.material.density,
-            "length": self.geometry.length,
-            "height": self.geometry.height,
-            "width": self.geometry.width,
-        }
-
-    def update_parameters(self, **kwargs) -> None:
-        """
-        Update model parameters.
-
-        Args:
-            **kwargs: Parameter name-value pairs to update
-        """
-        for key, value in kwargs.items():
-            if hasattr(self.material, key):
-                setattr(self.material, key, value)
-            elif hasattr(self.geometry, key):
-                setattr(self.geometry, key, value)
-
     def __repr__(self) -> str:
         """Return string representation."""
         return (

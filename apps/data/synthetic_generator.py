@@ -338,38 +338,6 @@ class SyntheticDataGenerator:
             0.1 * length, 0.9 * length, n_strain
         )
 
-    def generate_frequency_sweep(
-        self,
-        geometry: BeamGeometry,
-        material: MaterialProperties,
-        frequencies: np.ndarray,
-        excitation_amplitude: float = 1.0,
-    ) -> List[SyntheticDataset]:
-        """
-        Generate synthetic data for dynamic frequency response.
-
-        For model selection at different frequencies, this method generates
-        synthetic FRF (Frequency Response Function) data.
-
-        Args:
-            geometry: Beam geometry
-            material: Material properties
-            frequencies: Excitation frequencies [Hz]
-            excitation_amplitude: Force amplitude [N]
-
-        Returns:
-            List of datasets at each frequency
-
-        """
-        # Placeholder for dynamic analysis
-        # This requires either dynamic FEM (computationally expensive) or
-        # analytical frequency response functions for both beam theories
-
-        raise NotImplementedError(
-            "Dynamic data generation not yet implemented. "
-            "See GitHub issue #13 for frequency-domain analysis implementation."
-        )
-
 
 def save_dataset(dataset: SyntheticDataset, filepath: Path) -> None:
     """
@@ -418,57 +386,3 @@ def save_dataset(dataset: SyntheticDataset, filepath: Path) -> None:
         # Metadata
         for key, value in dataset.metadata.items():
             f.attrs[key] = str(value) if not isinstance(value, (int, float)) else value
-
-
-def load_dataset(filepath: Path) -> SyntheticDataset:
-    """
-    Load synthetic dataset from HDF5 file.
-
-    Args:
-        filepath: Input file path
-
-    Returns:
-        SyntheticDataset object
-
-    """
-    with h5py.File(filepath, "r") as f:
-        # Load geometry
-        geom = f["geometry"]
-        geometry = BeamGeometry(
-            length=geom.attrs["length"],
-            height=geom.attrs["height"],
-            width=geom.attrs["width"],
-        )
-
-        # Load material
-        mat = f["material"]
-        material = MaterialProperties(
-            elastic_modulus=mat.attrs["elastic_modulus"],
-            poisson_ratio=mat.attrs["poisson_ratio"],
-            density=mat.attrs["density"],
-        )
-
-        # Load load case
-        load_grp = f["load"]
-        load_case = LoadCase(
-            point_load=load_grp.attrs["point_load"],
-            distributed_load=load_grp.attrs["distributed_load"],
-        )
-
-        # Load measurements
-        disp = f["displacements"]
-        strain = f["strains"]
-
-        return SyntheticDataset(
-            geometry=geometry,
-            material=material,
-            load_case=load_case,
-            x_disp=disp["x"][:],
-            displacements=disp["values"][:],
-            displacement_noise_std=disp.attrs["noise_std"],
-            x_strain=strain["x"][:],
-            y_strain=strain["y"][:],
-            strains=strain["values"][:],
-            strain_noise_std=strain.attrs["noise_std"],
-            metadata=dict(f.attrs),
-        )

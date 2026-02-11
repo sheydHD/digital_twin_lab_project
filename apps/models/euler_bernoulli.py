@@ -219,24 +219,6 @@ class EulerBernoulliBeam(BaseBeamModel):
 
         return frequencies
 
-    def compute_curvature(
-        self,
-        x: np.ndarray,
-        load: LoadCase,
-    ) -> np.ndarray:
-        """
-        Compute beam curvature κ = M(x) / EI.
-
-        Args:
-            x: Positions along the beam [m]
-            load: Load case definition
-
-        Returns:
-            Curvature at each position [1/m]
-        """
-        M = self.compute_moment(x, load)
-        return M / self.flexural_rigidity
-
     def tip_deflection(self, load: LoadCase) -> float:
         """
         Compute deflection at beam tip (x = L).
@@ -262,29 +244,3 @@ class EulerBernoulliBeam(BaseBeamModel):
             w_tip += -load.moment * L**2 / (2 * EI)
 
         return w_tip
-
-    def tip_rotation(self, load: LoadCase) -> float:
-        """
-        Compute rotation at beam tip (x = L).
-
-        Args:
-            load: Load case definition
-
-        Returns:
-            Tip rotation [rad]
-        """
-        L = self.geometry.length
-        EI = self.flexural_rigidity
-
-        theta_tip = 0.0
-
-        if load.point_load != 0:
-            theta_tip += load.point_load * L**2 / (2 * EI)
-
-        if load.distributed_load != 0:
-            theta_tip += load.distributed_load * L**3 / (6 * EI)
-
-        if load.moment != 0:
-            theta_tip += load.moment * L / EI
-
-        return theta_tip
