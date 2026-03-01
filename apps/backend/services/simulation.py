@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import suppress
 from pathlib import Path
 
 from apps.backend.schemas import SimulationConfigIn, SimulationResultOut
@@ -55,10 +56,8 @@ def _clear_figures_dir() -> None:
     fig_dir = Path("outputs/figures")
     if fig_dir.exists():
         for png in fig_dir.glob("*.png"):
-            try:
+            with suppress(OSError):
                 png.unlink()
-            except OSError:
-                pass  # Non-fatal; worst case an old file stays around
 
 
 def run_simulation(cfg: SimulationConfigIn, progress: dict | None = None) -> SimulationResultOut:
