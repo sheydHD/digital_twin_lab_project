@@ -94,7 +94,7 @@ priors:
   poisson_ratio:
     distribution: normal
     mu: 0.3
-    sigma: 0.05  # Widened from 0.03 to reduce Occam asymmetry
+    sigma: 0.05  # Consistent across code, config, and presentation
   observation_noise:
     distribution: halfnormal
     sigma: 1.0e-6

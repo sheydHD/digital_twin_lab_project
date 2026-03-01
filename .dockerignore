@@ -1,0 +1,47 @@
+# ── VCS / CI ────────────────────────────────────────────────────────────────
+.git/
+.github/
+
+# ── Python artefacts ───────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# ── Testing / Linting ─────────────────────────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# ── Project outputs ────────────────────────────────────────────────────────
+outputs/
+*.h5
+*.hdf5
+*.netcdf
+
+# ── Frontend (only relevant when building the CLI image) ───────────────────
+apps/frontend/node_modules/
+apps/frontend/dist/
+
+# ── Documentation / IDE ───────────────────────────────────────────────────
+docs/
+/site
+.idea/
+.vscode/
+.obsidian/
+*.md
+!README.md
+
+# ── OS files ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.env
+.envrc

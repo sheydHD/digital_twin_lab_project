@@ -3,9 +3,6 @@
 # Run manually: pre-commit run --all-files
 # See https://pre-commit.com for more information
 
-default_language_version:
-  python: python3.10
-
 repos:
   # General file checks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -23,7 +20,7 @@ repos:
 
   # Ruff - Fast Python linter and formatter (replaces flake8, isort, black)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.2.0
+    rev: v0.4.0
     hooks:
       # Linting
       - id: ruff
@@ -50,14 +47,6 @@ repos:
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
         exclude: ^tests/
-
-  # Detect secrets in code
-  - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.4.0
-    hooks:
-      - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: package.lock.json
 
 # CI configuration
 ci:

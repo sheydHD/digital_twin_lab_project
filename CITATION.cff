@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Digital Twin Lab Project – Bayesian Beam Theory Selection"
+version: 0.1.0
+date-released: "2026-03-02"
+license: MIT
+repository-code: "https://github.com/sheydHD/digital_twin_lab_project"
+keywords:
+  - digital-twin
+  - bayesian-inference
+  - beam-theory
+  - model-selection
+  - finite-element-method
+abstract: >-
+  Bayesian model selection framework for choosing between
+  Euler-Bernoulli and Timoshenko beam theories as a function
+  of beam aspect ratio (L/h), designed for digital twin
+  applications in structural engineering.
+authors:
+  - family-names: "Dudij, Feldman"
+    given-names: "Antoni, Max"
+    affiliation: "RWTH Aachen University"
