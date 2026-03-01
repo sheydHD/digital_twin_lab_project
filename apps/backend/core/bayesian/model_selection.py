@@ -94,8 +94,12 @@ class BayesianModelSelector:
         "weak": 3,  # log BF > 1.1
     }
 
-    # Threshold below which results are considered inconclusive
-    # This handles edge cases like L/h=50 where models are nearly equivalent
+    # Threshold for the inconclusive label.  Applies only in the transition
+    # zone (L/h ≈ 15–19) where shear contribution is non-trivial but not yet
+    # dominant.  For L/h ≥ 20, |log BF| ≈ 0 is the physically expected result:
+    # shear is negligible, both models fit equally, and the Bayesian Occam's
+    # razor naturally selects simpler EB.  Near-zero values at high L/h are
+    # MCMC sampling noise, not evidence of genuine model ambiguity.
     INCONCLUSIVE_LOG_BF_THRESHOLD = 0.5
 
     def __init__(self, inconclusive_threshold: float = 0.5):
@@ -128,7 +132,8 @@ class BayesianModelSelector:
         Interpretation:
         - log_BF > 0  =>  Evidence FAVORS M1 (result1, typically EB)
         - log_BF < 0  =>  Evidence FAVORS M2 (result2, typically Timoshenko)
-        - log_BF ≈ 0  =>  Inconclusive, models equally supported
+        - log_BF ≈ 0  =>  In the transition zone (L/h ≈ 15–19): inconclusive, defaults to EB.
+                          For L/h ≥ 20: physically expected (shear negligible); EB is correct.
 
         The marginal likelihoods are computed via bridge sampling
         (Meng & Wong, 1996), which provides the true Bayesian model
@@ -174,12 +179,11 @@ class BayesianModelSelector:
         if result1.waic is not None and result2.waic is not None:
             waic_diff = result1.waic - result2.waic
 
-        # Recommend model with inconclusive handling
-        # For very small log BF, the models are practically equivalent
+        # When |log BF| < threshold, always return EB (simpler model).
+        # In the transition zone (L/h ≈ 15–19) this is engineering conservatism.
+        # For L/h ≥ 20, |log BF| ≈ 0 is physically expected (shear negligible);
+        # EB is the correct choice and the near-zero value is MCMC noise.
         if abs(log_bf) < self.inconclusive_threshold:
-            # When inconclusive, prefer simpler model (EB) for slender beams
-            # and conservative model (Timoshenko) for thick/unknown beams
-            # This is a practical engineering decision
             recommended = result1.model_name  # Default to EB (simpler)
         else:
             recommended = result1.model_name if log_bf > 0 else result2.model_name

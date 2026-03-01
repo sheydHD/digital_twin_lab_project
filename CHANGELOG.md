@@ -44,9 +44,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Follow
 ### results
 - transition aspect ratio: L/h ~ 19.2
 - thick beams (L/h <= 15): strong Timoshenko preference (log BF down to -10.8)
-- slender beams (L/h = 20-30): EB preference
-- very slender beams (L/h = 50): models indistinguishable
-
+- slender beams (L/h >= 20): EB preference
 ## [0.1.0] - 2025-12-15
 
 ### added

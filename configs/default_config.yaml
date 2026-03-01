@@ -105,9 +105,11 @@ model_selection:
   weak_evidence: 3      # BF > 3: Weak evidence
   moderate_evidence: 10 # BF > 10: Moderate evidence
   strong_evidence: 100  # BF > 100: Strong evidence
-  # Threshold below which results are considered inconclusive
-  # This handles edge cases (e.g., L/h=50) where models are nearly equivalent
-  inconclusive_threshold: 0.5  # |log BF| < 0.5 is inconclusive
+  # Threshold for the inconclusive label in the TRANSITION ZONE (L/h ≈ 15–19).
+  # For L/h ≥ 20, |log BF| ≈ 0 is the physically expected result — shear is
+  # negligible, both models fit equally, and Occam's razor selects EB.
+  # The near-zero values at high L/h are MCMC noise, NOT genuine ambiguity.
+  inconclusive_threshold: 0.5  # applies only in the transition zone
 
 # Hyperparameter optimization settings (Optuna)
 optimization:

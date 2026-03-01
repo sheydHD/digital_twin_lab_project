@@ -7,9 +7,28 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+      # Persist PyTensor's compiled C-kernel cache across container restarts.
+      # Without this, PyTensor recompiles MCMC kernels from scratch on every
+      # 'docker compose up', adding several minutes of overhead per model.
+      - pytensor_cache:/root/.pytensor
     environment:
       - PYTHONUNBUFFERED=1
-    command: uvicorn apps.backend.api.app:app --host 0.0.0.0 --port 8000 --reload
+      # Reinforce the BLAS linker flag and point the compiledir at the
+      # persistent named volume so the cache survives container restarts.
+      - PYTENSOR_FLAGS=blas__ldflags=-lopenblas,base_compiledir=/root/.pytensor
+      # Cap per-process BLAS/OpenMP thread counts to 1.
+      # PyMC already parallelises via n_chains sub-processes and the
+      # orchestrator adds a ProcessPoolExecutor with 2 outer workers.
+      # Without these limits, NumPy/OpenBLAS spawns N threads *per process*,
+      # causing dozens of competing threads and severe CPU thrashing.
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+    # No --reload: watchfiles would poll the entire mounted volume (including
+    # outputs/ where HDF5 files are written mid-simulation), burning CPU and
+    # risking a mid-run restart that kills the long-running MCMC job.
+    command: uvicorn apps.backend.api.app:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 5s
@@ -28,10 +47,20 @@ services:
       - ./apps/frontend:/app
       - /app/node_modules
     environment:
-      - CHOKIDAR_USEPOLLING=true
+      # Disabled filesystem polling for HMR.  Polling scans every file on a
+      # timer and is CPU-intensive; inotify receives kernel events instantly
+      # and uses near-zero CPU at rest.  On Linux (including Docker on Linux)
+      # inotify works correctly without polling, so we can safely turn it off.
+      - CHOKIDAR_USEPOLLING=false
       # Inside the docker network, the backend is always at backend:8000.
       - BACKEND_URL=http://backend:8000
     depends_on:
       backend:
         condition: service_healthy
     command: bun run dev --host 0.0.0.0
+
+volumes:
+  # Named volume for PyTensor's compiled C-kernel cache.
+  # Shared by all backend containers; survives 'docker compose down' so the
+  # compilation cost is paid at most once per host machine.
+  pytensor_cache:

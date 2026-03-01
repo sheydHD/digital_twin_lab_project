@@ -46,6 +46,21 @@ def _build_pipeline_config(cfg: SimulationConfigIn) -> dict:
     }
 
 
+def _clear_figures_dir() -> None:
+    """Delete all PNG files in outputs/figures before a new run.
+
+    Prevents plots from previous runs (potentially with different aspect ratios)
+    from appearing in the current run's results.
+    """
+    fig_dir = Path("outputs/figures")
+    if fig_dir.exists():
+        for png in fig_dir.glob("*.png"):
+            try:
+                png.unlink()
+            except OSError:
+                pass  # Non-fatal; worst case an old file stays around
+
+
 def run_simulation(cfg: SimulationConfigIn, progress: dict | None = None) -> SimulationResultOut:
     """Execute the Bayesian model-selection pipeline and return results.
 
@@ -78,6 +93,10 @@ def run_simulation(cfg: SimulationConfigIn, progress: dict | None = None) -> Sim
 
     job_id = uuid.uuid4().hex[:12]
     pipeline_cfg = _build_pipeline_config(cfg)
+
+    # Clear figures from any previous run so stale plots are never mixed into
+    # the results of this run when the figures directory is scanned at the end.
+    _clear_figures_dir()
 
     logger.info("Starting simulation job %s", job_id)
     orch = PipelineOrchestrator(pipeline_cfg)

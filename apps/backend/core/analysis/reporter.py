@@ -113,7 +113,7 @@ class ResultsReporter:
 
         if filename:
             filepath = self.output_dir / filename
-            with open(filepath, "w") as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 f.write(report_text)
 
         return report_text
@@ -168,7 +168,7 @@ class ResultsReporter:
 
         if filename:
             filepath = self.output_dir / filename
-            with open(filepath, "w") as f:
+            with open(filepath, "w", encoding="utf-8") as f:
                 f.write(report_text)
 
         return report_text
@@ -248,7 +248,7 @@ class ResultsReporter:
         report_text = "\n".join(report)
 
         filepath = self.output_dir / filename
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(report_text)
 
         return report_text
@@ -277,7 +277,7 @@ class ResultsReporter:
         }
 
         filepath = self.output_dir / filename
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(export_data, f, indent=2)
 
     def export_results_csv(
@@ -370,7 +370,7 @@ class ResultsReporter:
         report_text = "\n".join(report)
 
         filepath = self.output_dir / filename
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(report_text)
 
         return report_text

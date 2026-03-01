@@ -542,9 +542,9 @@ class PipelineOrchestrator:
             load=self.load,
         )
 
-        # Single beam comparison (first dataset as representative)
-        if self.datasets:
-            dataset = self.datasets[0]
+        # Beam comparison for every dataset so the frontend slider shows all
+        # configured aspect ratios, not just the first one.
+        for dataset in self.datasets:
             L_h = dataset.geometry.aspect_ratio
             self.visualizer.plot_beam_comparison(
                 geometry=dataset.geometry,

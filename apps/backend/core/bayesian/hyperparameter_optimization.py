@@ -393,7 +393,7 @@ class BayesianHyperparameterOptimizer:
         }
 
         filepath = self.output_dir / "optimization_results.json"
-        with open(filepath, "w") as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(output, f, indent=2)
 
         logger.info(f"Optimization results saved to {filepath}")

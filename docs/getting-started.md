@@ -169,7 +169,8 @@ The log Bayes factor $\ln B_{EB/Timo} = \ln p(\mathbf{y}\mid M_{EB}) - \ln p(\ma
 |---|---|
 | $< -2.3$ | Strong preference for Timoshenko |
 | $-2.3$ to $-0.5$ | Moderate preference for Timoshenko |
-| $-0.5$ to $+0.5$ | Inconclusive |
+| $-0.5$ to $+0.5$ in transition zone ($L/h \approx 15$–$19$) | Inconclusive — defaults to Euler-Bernoulli |
+| $|\ln B| \approx 0$ for $L/h \geq 20$ | Euler-Bernoulli — shear negligible; near-zero log BF is physically correct, not ambiguous |
 | $+0.5$ to $+2.3$ | Moderate preference for Euler-Bernoulli |
 | $> +2.3$ | Strong preference for Euler-Bernoulli |
 

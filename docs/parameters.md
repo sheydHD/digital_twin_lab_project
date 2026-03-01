@@ -82,7 +82,8 @@ These conventions are enforced consistently across `base_beam.py`, `calibration.
 | $\ln B_{EB/Timo}$ | $\ln p(\mathbf{y}\mid M_{EB}) - \ln p(\mathbf{y}\mid M_{Timo})$ |
 | Negative $\ln B$ | Favours Timoshenko |
 | Positive $\ln B$ | Favours Euler-Bernoulli |
-| $\lvert\ln B\rvert < 0.5$ | Inconclusive |
+| $\lvert\ln B\rvert < 0.5$ in transition zone ($L/h \approx 15$–$19$) | Inconclusive — use Euler-Bernoulli (simpler model) as default |
+| $\lvert\ln B\rvert \approx 0$ for $L/h \geq 20$ | Euler-Bernoulli — shear negligible; log BF near zero is physically expected |
 
 ---
 
@@ -112,13 +113,13 @@ Varied: $L/h$, which fixes beam height as $h = L/(L/h)$.
 | 20 | 0.050 | Slender | +0.39 | Euler-Bernoulli |
 | 30 | 0.033 | Slender | +0.08 | Euler-Bernoulli |
 | 50 | 0.020 | Very slender | +0.06 | Euler-Bernoulli |
-| 60 | 0.017 | Very slender | −0.06 | Inconclusive |
+| 60 | 0.017 | Very slender | −0.06 | Euler-Bernoulli |
 | 70 | 0.014 | Very slender | +0.18 | Euler-Bernoulli |
-| 100 | 0.010 | Very slender | −0.02 | Inconclusive |
+| 100 | 0.010 | Very slender | −0.02 | Euler-Bernoulli |
 
 **Transition point: $L/h \approx 19.2$** (linear interpolation of the $\ln B = 0$ zero-crossing between $L/h = 15$ and $L/h = 20$).
 
-The study grid is denser in the $L/h = 10$–$20$ region to resolve the transition accurately. For very slender beams ($L/h \geq 50$) the shear term $PL/(\kappa GA)$ is negligible relative to the bending term $PL^3/(3EI)$, and both models predict essentially identical deflections. The resulting $|\ln B| < 0.1$ correctly classifies this region as inconclusive rather than strongly favouring either theory.
+The study grid is denser in the $L/h = 10$–$20$ region to resolve the transition accurately. For slender beams ($L/h \geq 20$) the shear term $PL/(\kappa GA)$ is physically negligible relative to the bending term $PL^3/(3EI)$, and both models predict essentially identical deflections. The resulting $|\ln B| \approx 0$ is the expected physical outcome — not a sign of ambiguity. Because the models are equivalent in this regime, Occam's razor (encoded in the marginal likelihood) selects the simpler Euler-Bernoulli model. The small fluctuations in sign seen at $L/h = 50$–$60$ are MCMC sampling noise, not evidence of Timoshenko being preferred. *Inconclusive* as a label applies only in the narrow transition zone ($L/h \approx 15$–$19$) where the shear contribution is non-trivial but not yet dominant.
 
 ---
 

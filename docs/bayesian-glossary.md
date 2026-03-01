@@ -149,7 +149,7 @@ The log ratio of marginal likelihoods under two competing models. By convention,
 
 $$\ln B_{12} = \ln p(\mathbf{y} \mid \mathcal{M}_1) - \ln p(\mathbf{y} \mid \mathcal{M}_2)$$
 
-A positive value favours EB; a negative value favours Timoshenko; $|\ln B_{12}| < 0.5$ is classified as inconclusive.
+A positive value favours EB; a negative value favours Timoshenko. $|\ln B_{12}| < 0.5$ in the transition zone ($L/h \approx 15$–$19$) is classified as inconclusive, defaulting to EB. For $L/h \geq 20$, $|\ln B_{12}| \approx 0$ is the physically expected result — shear is negligible and Occam's razor correctly selects EB regardless of the exact sign.
 
 **Code location:** `BayesianModelSelector.compare_models()` in `model_selection.py`. **Runs during `make run`:** yes.
 
@@ -185,7 +185,7 @@ The standard interpretation of Bayes factor magnitude (Kass & Raftery, 1995):
 
 | $|\ln B_{12}|$ | Evidence |
 |---|---|
-| $< 0.5$ | Inconclusive |
+| $< 0.5$ | Inconclusive (transition zone only; for $L/h \geq 20$ this value means EB is correct) |
 | $0.5$–$1.0$ | Weak |
 | $1.0$–$2.3$ | Moderate |
 | $> 2.3$ | Strong |

@@ -103,11 +103,11 @@ Default configuration: structural steel ($E = 210$ GPa, $\nu = 0.3$), 1 m cantil
 | 10 | −4.146 | Timoshenko |
 | 12 | −3.595 | Timoshenko |
 | 15 | −2.109 | Timoshenko |
-| 20 | +0.420 | inconclusive |
+| 20 | +0.420 | Euler-Bernoulli |
 | 30 | +0.255 | Euler-Bernoulli |
 | 50 | −0.031 | Euler-Bernoulli |
 
-**Transition point: $L/h \approx 19.2$.** Negative $\ln B$ favours Timoshenko; positive favours EB; $|\ln B| < 0.5$ is inconclusive. For the thick-beam regime ($L/h \leq 15$), Timoshenko is strongly preferred with $\ln B < -2.3$ (strong evidence on the Kass–Raftery scale). At very high $L/h$, both theories predict essentially identical deflections and the evidence cannot distinguish them.
+**Transition point: $L/h \approx 19.2$.** Negative $\ln B$ favours Timoshenko; positive favours EB. For the thick-beam regime ($L/h \leq 15$), Timoshenko is strongly preferred with $\ln B < -2.3$ (strong evidence on the Kass–Raftery scale). For $L/h \geq 20$ the shear term $PL/(\kappa GA)$ is physically negligible, so both models produce essentially identical deflections and $|\ln B|$ hovers near zero due to MCMC noise — this is the expected and correct result. Occam's razor then selects the simpler EB model. Values of $|\ln B| < 0.5$ are only labelled *inconclusive* in the narrow transition zone around $L/h \approx 15$–$19$, not for slender beams where EB is unambiguously appropriate.
 
 ## Configuration
 

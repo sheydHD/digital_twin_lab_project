@@ -48,7 +48,7 @@ class TestResultsReporter:
         path = reporter.output_dir / "test.json"
         assert path.exists()
 
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         assert data["aspect_ratios"] == [5.0, 10.0, 20.0]
         assert data["transition_aspect_ratio"] == 12.0
 
@@ -56,7 +56,7 @@ class TestResultsReporter:
         reporter.export_results_csv(study_results, "test.csv")
         path = reporter.output_dir / "test.csv"
         assert path.exists()
-        lines = path.read_text().strip().split("\n")
+        lines = path.read_text(encoding="utf-8").strip().split("\n")
         assert len(lines) == 4  # header + 3 rows
 
     def test_calibration_report(self, reporter: ResultsReporter) -> None:
