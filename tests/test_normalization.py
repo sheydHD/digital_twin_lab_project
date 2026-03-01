@@ -11,7 +11,7 @@ Tests:
 import numpy as np
 import pytest
 
-from apps.bayesian.normalization import (
+from apps.backend.core.bayesian.normalization import (
     NormalizationParams,
     compute_normalization_params,
     create_normalizer_from_dataset,
@@ -35,11 +35,7 @@ class TestNormalizationParams:
 
     def test_custom_values(self):
         """Test custom normalization parameters."""
-        params = NormalizationParams(
-            displacement_scale=1e-5,
-            E_scale=200e9,
-            is_active=True
-        )
+        params = NormalizationParams(displacement_scale=1e-5, E_scale=200e9, is_active=True)
 
         assert params.displacement_scale == 1e-5
         assert params.E_scale == 200e9
@@ -55,11 +51,7 @@ class TestNormalizationParams:
 
     def test_summary(self):
         """Test summary string generation."""
-        params = NormalizationParams(
-            displacement_scale=5e-5,
-            E_scale=210e9,
-            is_active=True
-        )
+        params = NormalizationParams(displacement_scale=5e-5, E_scale=210e9, is_active=True)
 
         summary = params.summary()
 
@@ -178,7 +170,7 @@ class TestCreateNormalizerFromDataset:
         """Test normalizer creation from dataset."""
         from unittest.mock import MagicMock
 
-        from apps.data.synthetic_generator import SyntheticDataset
+        from apps.backend.core.data.synthetic_generator import SyntheticDataset
 
         # Create mock dataset
         dataset = MagicMock(spec=SyntheticDataset)

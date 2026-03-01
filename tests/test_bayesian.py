@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
-from apps.bayesian.calibration import (
+from apps.backend.core.bayesian.calibration import (
     CalibrationResult,
     EulerBernoulliCalibrator,
     PriorConfig,
@@ -22,8 +22,8 @@ from apps.bayesian.calibration import (
     create_default_priors,
     create_timoshenko_priors,
 )
-from apps.data.synthetic_generator import SyntheticDataset
-from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+from apps.backend.core.data.synthetic_generator import SyntheticDataset
+from apps.backend.core.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
 
 
 class TestPriorConfig:
@@ -32,9 +32,7 @@ class TestPriorConfig:
     def test_normal_prior(self):
         """Test normal prior configuration."""
         prior = PriorConfig(
-            param_name="E",
-            distribution="normal",
-            params={"mu": 210e9, "sigma": 10e9}
+            param_name="E", distribution="normal", params={"mu": 210e9, "sigma": 10e9}
         )
         assert prior.param_name == "E"
         assert prior.distribution == "normal"
@@ -43,19 +41,13 @@ class TestPriorConfig:
     def test_lognormal_prior(self):
         """Test lognormal prior configuration."""
         prior = PriorConfig(
-            param_name="E",
-            distribution="lognormal",
-            params={"mu": np.log(210e9), "sigma": 0.05}
+            param_name="E", distribution="lognormal", params={"mu": np.log(210e9), "sigma": 0.05}
         )
         assert prior.distribution == "lognormal"
 
     def test_halfnormal_prior(self):
         """Test halfnormal prior configuration."""
-        prior = PriorConfig(
-            param_name="sigma",
-            distribution="halfnormal",
-            params={"sigma": 1e-5}
-        )
+        prior = PriorConfig(param_name="sigma", distribution="halfnormal", params={"sigma": 1e-5})
         assert prior.distribution == "halfnormal"
 
 
@@ -168,7 +160,7 @@ class TestTimoshenkoCalibrator:
 
     def test_forward_model_includes_shear(self, calibrator, mock_dataset):
         """Test Timoshenko includes shear deformation."""
-        from apps.models.euler_bernoulli import EulerBernoulliBeam
+        from apps.backend.core.models.euler_bernoulli import EulerBernoulliBeam
 
         x = mock_dataset.x_disp
         geometry = mock_dataset.geometry
@@ -200,7 +192,7 @@ class TestCalibrationResult:
             posterior_summary={"E": {"mean": 210e9}},
             log_likelihood=np.array([-100, -101, -99]),
             waic=-200.0,
-            convergence_diagnostics={"r_hat": {"E": 1.001}}
+            convergence_diagnostics={"r_hat": {"E": 1.001}},
         )
 
         assert result.model_name == "Test"
@@ -228,7 +220,7 @@ class TestNormalizationIntegration:
 
     def test_normalization_params_computed(self):
         """Test that normalization params are computed from data."""
-        from apps.bayesian.normalization import compute_normalization_params
+        from apps.backend.core.bayesian.normalization import compute_normalization_params
 
         displacements = np.array([-1e-5, -2e-5, -3e-5, -4e-5, -5e-5])
 

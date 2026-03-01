@@ -1,185 +1,139 @@
 """
-Unit tests for FEM module.
+Unit tests for the 1D Timoshenko Beam FEM module.
 """
+
+from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from apps.fem.cantilever_fem import CantileverFEM
+from apps.backend.core.fem.beam_fem import TimoshenkoBeamFEM
 
 
-class TestCantileverFEM:
-    """Tests for the FEM cantilever model."""
+class TestTimoshenkoBeamFEM:
+    """Tests for the 1D Timoshenko beam finite element model."""
 
     @pytest.fixture
-    def setup_fem(self):
-        """Create standard FEM model for testing."""
-        return CantileverFEM(
+    def standard_beam(self) -> TimoshenkoBeamFEM:
+        """Create a standard steel cantilever beam FEM model."""
+        return TimoshenkoBeamFEM(
             length=1.0,
             height=0.1,
-            thickness=0.05,
+            width=0.05,
             elastic_modulus=210e9,
             poisson_ratio=0.3,
-            n_elements_x=20,
-            n_elements_y=4,
+            n_elements=20,
         )
 
-    def test_mesh_generation(self, setup_fem):
-        """Test that mesh is generated correctly."""
-        fem = setup_fem
-        mesh = fem.mesh
+    # ------------------------------------------------------------------
+    # Element stiffness matrix properties
+    # ------------------------------------------------------------------
 
-        # Check dimensions
-        n_nodes_x = fem.n_elem_x + 1
-        n_nodes_y = fem.n_elem_y + 1
-        expected_nodes = n_nodes_x * n_nodes_y
+    def test_element_stiffness_symmetry(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        Ke = standard_beam._Ke
+        assert np.allclose(Ke, Ke.T), "Element stiffness matrix must be symmetric"
 
-        assert mesh.n_nodes == expected_nodes
-        assert mesh.n_elements == fem.n_elem_x * fem.n_elem_y
+    def test_element_stiffness_positive_semidefinite(
+        self, standard_beam: TimoshenkoBeamFEM
+    ) -> None:
+        eigenvalues = np.linalg.eigvalsh(standard_beam._Ke)
+        assert np.all(eigenvalues >= -1e-6), "Ke eigenvalues must be non-negative"
 
-    def test_node_coordinates_range(self, setup_fem):
-        """Test that node coordinates are within beam dimensions."""
-        fem = setup_fem
-        nodes = fem.mesh.nodes
+    # ------------------------------------------------------------------
+    # Boundary conditions & simple sanity checks
+    # ------------------------------------------------------------------
 
-        assert np.all(nodes[:, 0] >= 0)
-        assert np.all(nodes[:, 0] <= fem.length)
-        assert np.all(nodes[:, 1] >= -fem.height / 2)
-        assert np.all(nodes[:, 1] <= fem.height / 2)
+    def test_fixed_end_zero_displacement(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        result = standard_beam.solve(point_load=1000.0)
+        assert result.deflections[0] == pytest.approx(0.0, abs=1e-15)
+        assert result.rotations[0] == pytest.approx(0.0, abs=1e-15)
 
-    def test_plane_stress_matrix_symmetry(self, setup_fem):
-        """Test that constitutive matrix is symmetric."""
-        fem = setup_fem
-        D = fem.D
+    def test_tip_deflection_sign(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        """Positive point_load (downward) should produce negative tip deflection."""
+        result = standard_beam.solve(point_load=1000.0)
+        assert result.tip_deflection < 0
 
-        assert np.allclose(D, D.T)
+    def test_no_load_zero_solution(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        result = standard_beam.solve(point_load=0.0, distributed_load=0.0)
+        assert np.allclose(result.deflections, 0.0)
+        assert np.allclose(result.rotations, 0.0)
 
-    def test_element_stiffness_symmetry(self, setup_fem):
-        """Test that element stiffness matrix is symmetric."""
-        fem = setup_fem
-        Ke = fem._element_stiffness(0)
+    # ------------------------------------------------------------------
+    # Accuracy against analytical Timoshenko beam theory
+    # ------------------------------------------------------------------
 
-        assert np.allclose(Ke, Ke.T)
+    def test_tip_deflection_matches_analytical(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        """FEM tip deflection should match Timoshenko analytical solution within 1%."""
+        from apps.backend.core.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+        from apps.backend.core.models.timoshenko import TimoshenkoBeam
 
-    def test_element_stiffness_positive_definite(self, setup_fem):
-        """Test that element stiffness matrix is positive semi-definite."""
-        fem = setup_fem
-        Ke = fem._element_stiffness(0)
+        P = 1000.0
+        result = standard_beam.solve(point_load=P)
 
-        eigenvalues = np.linalg.eigvalsh(Ke)
-        # Should be non-negative (allowing for numerical tolerance)
-        # Single element has 3 rigid body modes with near-zero eigenvalues
-        assert np.all(eigenvalues >= -1e-5)
-
-    def test_fem_solution_tip_deflection(self, setup_fem):
-        """Test FEM solution against analytical tip deflection (Task T6)."""
-        fem = setup_fem
-        P = 1000  # Point load at tip
-
-        # Solve FEM problem
-        result = fem.solve(point_load=P)
-
-        # Get analytical Timoshenko solution for comparison
-        from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
-        from apps.models.timoshenko import TimoshenkoBeam
-
-        geometry = BeamGeometry(length=fem.length, height=fem.height, width=fem.thickness)
+        geometry = BeamGeometry(
+            length=standard_beam.L,
+            height=standard_beam.h,
+            width=standard_beam.b,
+        )
         material = MaterialProperties(
-            elastic_modulus=fem.E,
-            poisson_ratio=fem.nu,
+            elastic_modulus=standard_beam.E,
+            poisson_ratio=standard_beam.nu,
         )
-        timo = TimoshenkoBeam(geometry, material)
-        load = LoadCase(point_load=P)
-        w_analytical = timo.tip_deflection(load)
+        analytical = TimoshenkoBeam(geometry, material)
+        w_analytical = analytical.tip_deflection(LoadCase(point_load=P))
 
-        # FEM should be within 25% of analytical (2D plane stress differs from 1D beam theory)
-        # Compare magnitudes since both should be negative (downward)
-        assert np.isclose(abs(result.tip_deflection), abs(w_analytical), rtol=0.25)
+        assert abs(result.tip_deflection) == pytest.approx(abs(w_analytical), rel=0.01), (
+            "FEM and analytical Timoshenko should agree within 1%"
+        )
 
-    def test_mesh_convergence(self):
-        """Test that solution converges with mesh refinement (Task T7)."""
-        P = 1000
-        tip_deflections = []
+    # ------------------------------------------------------------------
+    # Mesh convergence
+    # ------------------------------------------------------------------
 
-        for n_elem_x in [10, 20, 40]:
-            fem = CantileverFEM(
+    def test_mesh_convergence(self) -> None:
+        """Finer meshes should converge to a stable tip deflection."""
+        P = 1000.0
+        tips = []
+        for n_elem in [5, 10, 20, 40]:
+            fem = TimoshenkoBeamFEM(
                 length=1.0,
                 height=0.1,
-                thickness=0.05,
+                width=0.05,
                 elastic_modulus=210e9,
                 poisson_ratio=0.3,
-                n_elements_x=n_elem_x,
-                n_elements_y=4,
+                n_elements=n_elem,
             )
-            result = fem.solve(point_load=P)
-            tip_deflections.append(result.tip_deflection)
+            tips.append(fem.solve(point_load=P).tip_deflection)
 
-        # Differences should decrease with refinement
-        diff1 = abs(tip_deflections[1] - tip_deflections[0])
-        diff2 = abs(tip_deflections[2] - tip_deflections[1])
-        assert diff2 < diff1
+        # Each step closer → smaller change
+        diffs = [abs(tips[i + 1] - tips[i]) for i in range(len(tips) - 1)]
+        for i in range(len(diffs) - 1):
+            assert diffs[i + 1] <= diffs[i] + 1e-14
 
-    def test_strain_extraction(self, setup_fem):
-        """Test strain extraction at sensor locations (Task T8)."""
-        fem = setup_fem
-        P = 1000
-        result = fem.solve(point_load=P)
+    # ------------------------------------------------------------------
+    # Result container tests
+    # ------------------------------------------------------------------
 
-        # Check that strains were computed
-        assert result.strains is not None
-        assert len(result.strains) == fem.mesh.n_elements
+    def test_result_shape(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        result = standard_beam.solve(point_load=500.0)
+        n_nodes = standard_beam.n_nodes
+        assert result.deflections.shape == (n_nodes,)
+        assert result.rotations.shape == (n_nodes,)
+        assert result.x.shape == (n_nodes,)
 
-        # Extract surface strains
-        x_data, strain_data = fem.extract_surface_strain(result.strains, "top")
+    def test_get_deflection_at(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        result = standard_beam.solve(point_load=500.0)
+        x_query = np.array([0.0, 0.5, 1.0])
+        interp = result.get_deflection_at(x_query)
+        assert interp.shape == (3,)
+        assert interp[0] == pytest.approx(0.0, abs=1e-12)
 
-        # Should have some data points
-        assert len(x_data) > 0
+    # ------------------------------------------------------------------
+    # Distributed load
+    # ------------------------------------------------------------------
 
-        # For cantilever with downward tip load:
-        # - Top surface is in tension (positive strain)
-        # - Bottom surface would be in compression (negative strain)
-        assert np.mean(strain_data) > 0
-
-
-class TestShapeFunctions:
-    """Tests for FEM shape functions."""
-
-    @pytest.fixture
-    def setup_fem(self):
-        return CantileverFEM(
-            length=1.0,
-            height=0.1,
-            thickness=0.05,
-            elastic_modulus=210e9,
-            poisson_ratio=0.3,
-        )
-
-    def test_shape_functions_sum_to_one(self, setup_fem):
-        """Test that shape functions sum to 1 (partition of unity)."""
-        fem = setup_fem
-
-        # Test at various points
-        test_points = [
-            (0, 0),
-            (0.5, 0.5),
-            (-0.5, -0.5),
-            (1, 1),
-            (-1, -1),
-        ]
-
-        for xi, eta in test_points:
-            N, _ = fem._q4_shape_functions(xi, eta)
-            assert np.isclose(np.sum(N), 1.0)
-
-    def test_shape_functions_at_corners(self, setup_fem):
-        """Test shape function values at element corners."""
-        fem = setup_fem
-
-        # At node 1 (xi=-1, eta=-1), N1=1, others=0
-        N, _ = fem._q4_shape_functions(-1, -1)
-        assert np.isclose(N[0], 1.0)
-        assert np.allclose(N[1:], 0.0)
-
-        # At node 2 (xi=1, eta=-1), N2=1, others=0
-        N, _ = fem._q4_shape_functions(1, -1)
-        assert np.isclose(N[1], 1.0)
+    def test_distributed_load(self, standard_beam: TimoshenkoBeamFEM) -> None:
+        """Distributed load should produce deflection everywhere except fixed end."""
+        result = standard_beam.solve(distributed_load=5000.0)
+        assert result.deflections[0] == pytest.approx(0.0, abs=1e-15)
+        assert result.tip_deflection < 0

@@ -5,9 +5,9 @@ Unit tests for beam model implementations.
 import numpy as np
 import pytest
 
-from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
-from apps.models.euler_bernoulli import EulerBernoulliBeam
-from apps.models.timoshenko import TimoshenkoBeam
+from apps.backend.core.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+from apps.backend.core.models.euler_bernoulli import EulerBernoulliBeam
+from apps.backend.core.models.timoshenko import TimoshenkoBeam
 
 
 class TestBeamGeometry:
@@ -238,7 +238,7 @@ class TestBeamComparison:
         differences = []
 
         for L_h in aspect_ratios:
-            geometry = BeamGeometry(length=1.0, height=1.0/L_h, width=0.05)
+            geometry = BeamGeometry(length=1.0, height=1.0 / L_h, width=0.05)
             eb = EulerBernoulliBeam(geometry, material)
             timo = TimoshenkoBeam(geometry, material)
 
