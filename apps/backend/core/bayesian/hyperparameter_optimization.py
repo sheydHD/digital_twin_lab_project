@@ -13,24 +13,26 @@ Reference:
 - Akiba et al. (2019) "Optuna: A Next-generation Hyperparameter Optimization Framework"
 """
 
+from __future__ import annotations
+
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import optuna
 from optuna.pruners import MedianPruner
 from optuna.samplers import TPESampler
 
-from apps.bayesian.calibration import (
+from apps.backend.core.bayesian.calibration import (
     EulerBernoulliCalibrator,
     PriorConfig,
     TimoshenkoCalibrator,
 )
-from apps.bayesian.model_selection import BayesianModelSelector
-from apps.data.synthetic_generator import SyntheticDataset
+from apps.backend.core.bayesian.model_selection import BayesianModelSelector
+from apps.backend.core.data.synthetic_generator import SyntheticDataset
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +49,15 @@ class OptimizationResult:
         study: Optuna study object
         optimization_history: History of objective values
     """
-    best_params: Dict
+
+    best_params: dict
     best_score: float
     n_trials: int
     study: optuna.Study
-    optimization_history: List[float]
+    optimization_history: list[float]
 
 
-def get_physical_expectations(aspect_ratios: List[float]) -> List[str]:
+def get_physical_expectations(aspect_ratios: list[float]) -> list[str]:
     """
     Get physically expected model recommendations based on aspect ratio.
 
@@ -83,9 +86,9 @@ def get_physical_expectations(aspect_ratios: List[float]) -> List[str]:
 
 
 def create_priors_from_params(
-    trial_params: Dict,
+    trial_params: dict,
     include_poisson: bool = False,
-) -> List[PriorConfig]:
+) -> list[PriorConfig]:
     """
     Create PriorConfig list from trial parameters.
 
@@ -142,8 +145,8 @@ class BayesianHyperparameterOptimizer:
 
     def __init__(
         self,
-        datasets: List[SyntheticDataset],
-        expected_recommendations: Optional[List[str]] = None,
+        datasets: list[SyntheticDataset],
+        expected_recommendations: list[str] | None = None,
         output_dir: Path = Path("outputs/optimization"),
     ):
         """
@@ -192,15 +195,11 @@ class BayesianHyperparameterOptimizer:
 
             # Prior hyperparameters
             trial.suggest_float("E_prior_sigma", 0.02, 0.12)
-            trial.suggest_float(
-                "sigma_prior_scale", 1e-8, 5e-6, log=True
-            )
+            trial.suggest_float("sigma_prior_scale", 1e-8, 5e-6, log=True)
             trial.suggest_float("nu_prior_sigma", 0.01, 0.08)
 
             # Inconclusive threshold
-            inconclusive_threshold = trial.suggest_float(
-                "inconclusive_threshold", 0.3, 1.0
-            )
+            inconclusive_threshold = trial.suggest_float("inconclusive_threshold", 0.3, 1.0)
 
             # Create priors
             eb_priors = create_priors_from_params(trial.params, include_poisson=False)
@@ -244,12 +243,12 @@ class BayesianHyperparameterOptimizer:
                         target_accept=target_accept,
                     )
                     timo_result = timo_cal.calibrate(dataset)
-                    timo_result.marginal_likelihood_estimate = timo_cal.compute_marginal_likelihood()
+                    timo_result.marginal_likelihood_estimate = (
+                        timo_cal.compute_marginal_likelihood()
+                    )
 
                     # Compare models using bridge sampling marginal likelihoods
-                    comparison = self.selector.compare_models(
-                        eb_result, timo_result
-                    )
+                    comparison = self.selector.compare_models(eb_result, timo_result)
 
                     log_bf = comparison.log_bayes_factor
 
@@ -290,7 +289,7 @@ class BayesianHyperparameterOptimizer:
                     continue
 
             if n_evaluated == 0:
-                return float('-inf')
+                return float("-inf")
 
             # Combined objective: accuracy + scaled confidence
             accuracy = correct_selections / n_evaluated
@@ -300,7 +299,7 @@ class BayesianHyperparameterOptimizer:
 
         return objective
 
-    def _get_key_indices(self) -> List[int]:
+    def _get_key_indices(self) -> list[int]:
         """
         Get indices of key datasets for fast optimization.
 
@@ -315,11 +314,11 @@ class BayesianHyperparameterOptimizer:
 
         # Select ~4-5 key points
         indices = [
-            0,                  # Thickest
-            n // 4,             # Lower-mid
-            n // 2,             # Middle (transition)
-            3 * n // 4,         # Upper-mid
-            n - 1,              # Most slender
+            0,  # Thickest
+            n // 4,  # Lower-mid
+            n // 2,  # Middle (transition)
+            3 * n // 4,  # Upper-mid
+            n - 1,  # Most slender
         ]
 
         return sorted(set(indices))
@@ -327,7 +326,7 @@ class BayesianHyperparameterOptimizer:
     def optimize(
         self,
         n_trials: int = 30,
-        timeout: Optional[int] = 3600,
+        timeout: int | None = 3600,
         fast_mode: bool = True,
         study_name: str = "bayesian_calibration_optimization",
     ) -> OptimizationResult:
@@ -369,10 +368,7 @@ class BayesianHyperparameterOptimizer:
         )
 
         # Extract history
-        history = [
-            t.value for t in study.trials
-            if t.value is not None
-        ]
+        history = [t.value for t in study.trials if t.value is not None]
 
         result = OptimizationResult(
             best_params=study.best_params,
@@ -404,8 +400,8 @@ class BayesianHyperparameterOptimizer:
 
     def get_optimized_priors(
         self,
-        params: Optional[Dict] = None,
-    ) -> Tuple[List[PriorConfig], List[PriorConfig]]:
+        params: dict | None = None,
+    ) -> tuple[list[PriorConfig], list[PriorConfig]]:
         """
         Get optimized prior configurations.
 
@@ -447,7 +443,7 @@ class FrequencyBasedModelSelector:
         geometry,
         material,
         mode_number: int = 1,
-    ) -> Dict:
+    ) -> dict:
         """
         Compute the frequency at which model selection changes.
 
@@ -462,8 +458,8 @@ class FrequencyBasedModelSelector:
         Returns:
             Dictionary with frequency thresholds and recommendations
         """
-        from apps.models.euler_bernoulli import EulerBernoulliBeam
-        from apps.models.timoshenko import TimoshenkoBeam
+        from apps.backend.core.models.euler_bernoulli import EulerBernoulliBeam
+        from apps.backend.core.models.timoshenko import TimoshenkoBeam
 
         eb_beam = EulerBernoulliBeam(geometry, material)
         timo_beam = TimoshenkoBeam(geometry, material)
@@ -504,7 +500,7 @@ class FrequencyBasedModelSelector:
     def _get_frequency_recommendation(
         self,
         aspect_ratio: float,
-        threshold_mode: Optional[int],
+        threshold_mode: int | None,
     ) -> str:
         """Generate frequency-based recommendation."""
         if aspect_ratio < 10:
@@ -515,7 +511,7 @@ class FrequencyBasedModelSelector:
         elif aspect_ratio > 30:
             if threshold_mode and threshold_mode <= 3:
                 return (
-                    f"Euler-Bernoulli acceptable for modes 1-{threshold_mode-1}. "
+                    f"Euler-Bernoulli acceptable for modes 1-{threshold_mode - 1}. "
                     f"Use Timoshenko for mode {threshold_mode} and higher."
                 )
             else:
@@ -531,8 +527,8 @@ class FrequencyBasedModelSelector:
 
     def analyze_frequency_study(
         self,
-        datasets: List[SyntheticDataset],
-    ) -> Dict:
+        datasets: list[SyntheticDataset],
+    ) -> dict:
         """
         Analyze model selection across frequencies for all datasets.
 
@@ -556,16 +552,17 @@ class FrequencyBasedModelSelector:
             "summary": self._summarize_frequency_study(results),
         }
 
-    def _summarize_frequency_study(self, results: List[Dict]) -> Dict:
+    def _summarize_frequency_study(self, results: list[dict]) -> dict:
         """Generate summary of frequency study."""
         transition_modes = [
-            r["transition_mode"] for r in results
-            if r["transition_mode"] is not None
+            r["transition_mode"] for r in results if r["transition_mode"] is not None
         ]
 
         return {
             "n_datasets_analyzed": len(results),
-            "typical_transition_mode": int(np.median(transition_modes)) if transition_modes else None,
+            "typical_transition_mode": int(np.median(transition_modes))
+            if transition_modes
+            else None,
             "guideline": (
                 "For dynamic digital twins:\n"
                 "1. Check if excitation frequency exceeds first natural frequency\n"
@@ -576,9 +573,9 @@ class FrequencyBasedModelSelector:
 
 
 def run_quick_optimization(
-    datasets: List[SyntheticDataset],
+    datasets: list[SyntheticDataset],
     n_trials: int = 20,
-) -> Dict:
+) -> dict:
     """
     Run a quick optimization with minimal settings.
 

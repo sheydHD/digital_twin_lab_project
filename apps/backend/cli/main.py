@@ -12,21 +12,18 @@ Author: Digital Twins Lab
 Date: January 2026
 """
 
+from __future__ import annotations
+
 import logging
-import sys
 from pathlib import Path
 
 import click
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-# Add the project root to Python path
-PROJECT_ROOT = Path(__file__).parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from apps.pipeline.orchestrator import PipelineOrchestrator
-from apps.utils.config import load_config
-from apps.utils.logging_setup import setup_logging
+from apps.backend.core.pipeline.orchestrator import PipelineOrchestrator
+from apps.backend.core.utils.config import load_config
+from apps.backend.core.utils.logging_setup import setup_logging
 
 console = Console()
 
@@ -169,10 +166,14 @@ def main(
 
                 # Optional: run optimization first
                 if optimize:
-                    progress.update(task, description="[cyan]Running hyperparameter optimization...")
+                    progress.update(
+                        task, description="[cyan]Running hyperparameter optimization..."
+                    )
                     orchestrator.run_data_generation()
                     opt_results = orchestrator.run_optimization(n_trials=optimize_trials)
-                    progress.update(task, description="[cyan]Running calibration with optimized params...")
+                    progress.update(
+                        task, description="[cyan]Running calibration with optimized params..."
+                    )
                     orchestrator.run_calibration_with_optimized_params(opt_results["best_params"])
                     orchestrator.run_analysis()
                     orchestrator.run_frequency_analysis()
@@ -209,14 +210,14 @@ def main(
     except FileNotFoundError as e:
         console.print(f"\n[bold red]Configuration error:[/bold red] {e}")
         logger.exception("Configuration file not found")
-        sys.exit(1)
+        raise SystemExit(1) from e
 
     except Exception as e:
         console.print(f"\n[bold red]Pipeline error:[/bold red] {e}")
         logger.exception("Pipeline failed with error")
         if debug:
             raise
-        sys.exit(1)
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":

@@ -2,8 +2,10 @@
 Configuration Loading Utilities.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -22,7 +24,7 @@ def _convert_numeric_strings(obj: Any) -> Any:
     elif isinstance(obj, str):
         # Try to convert to number if it looks numeric
         try:
-            if '.' in obj or 'e' in obj.lower():
+            if "." in obj or "e" in obj.lower():
                 return float(obj)
             return int(obj)
         except ValueError:
@@ -30,7 +32,7 @@ def _convert_numeric_strings(obj: Any) -> Any:
     return obj
 
 
-def load_config(config_path: str) -> Dict[str, Any]:
+def load_config(config_path: str) -> dict[str, Any]:
     """
     Load configuration from YAML file.
 
@@ -49,7 +51,7 @@ def load_config(config_path: str) -> Dict[str, Any]:
     if not config_path.exists():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         config = yaml.safe_load(f)
 
     # Convert any numeric strings (handles scientific notation edge cases)

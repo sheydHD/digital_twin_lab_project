@@ -20,15 +20,15 @@ Reference:
 - Gronau et al. (2017) "bridgesampling: An R Package"
 """
 
+from __future__ import annotations
+
 import logging
-import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
 
 import numpy as np
 
-from apps.bayesian.calibration import CalibrationResult
+from apps.backend.core.bayesian.calibration import CalibrationResult
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class ModelComparisonResult:
     evidence_interpretation: ModelEvidence
     model1_probability: float
     model2_probability: float
-    waic_difference: Optional[float]
+    waic_difference: float | None
     recommended_model: str
 
 
@@ -144,8 +144,10 @@ class BayesianModelSelector:
         Raises:
             ValueError: If marginal likelihood not computed for either model
         """
-        if result1.marginal_likelihood_estimate is None or \
-           result2.marginal_likelihood_estimate is None:
+        if (
+            result1.marginal_likelihood_estimate is None
+            or result2.marginal_likelihood_estimate is None
+        ):
             raise ValueError(
                 "Marginal likelihood not computed for one or both models. "
                 "Run compute_marginal_likelihood() after calibration."
@@ -217,10 +219,10 @@ class BayesianModelSelector:
 
     def analyze_aspect_ratio_study(
         self,
-        eb_results: List[CalibrationResult],
-        timo_results: List[CalibrationResult],
-        aspect_ratios: List[float],
-    ) -> Dict:
+        eb_results: list[CalibrationResult],
+        timo_results: list[CalibrationResult],
+        aspect_ratios: list[float],
+    ) -> dict:
         """
         Analyze model selection across different aspect ratios.
 
@@ -253,14 +255,10 @@ class BayesianModelSelector:
             recommendations.append(comp.recommended_model)
 
         # Find transition point
-        transition_point = self._find_transition_point(
-            aspect_ratios, log_bfs
-        )
+        transition_point = self._find_transition_point(aspect_ratios, log_bfs)
 
         # Generate guidelines
-        guidelines = self._generate_guidelines(
-            aspect_ratios, log_bfs, transition_point
-        )
+        guidelines = self._generate_guidelines(aspect_ratios, log_bfs, transition_point)
 
         return {
             "aspect_ratios": aspect_ratios,
@@ -273,9 +271,9 @@ class BayesianModelSelector:
 
     def _find_transition_point(
         self,
-        aspect_ratios: List[float],
-        log_bfs: List[float],
-    ) -> Optional[float]:
+        aspect_ratios: list[float],
+        log_bfs: list[float],
+    ) -> float | None:
         """
         Find the aspect ratio where model preference transitions.
 
@@ -308,10 +306,10 @@ class BayesianModelSelector:
 
     def _generate_guidelines(
         self,
-        aspect_ratios: List[float],
-        log_bfs: List[float],
-        transition_point: Optional[float],
-    ) -> Dict[str, str]:
+        aspect_ratios: list[float],
+        log_bfs: list[float],
+        transition_point: float | None,
+    ) -> dict[str, str]:
         """
         Generate practical guidelines for model selection.
 
@@ -339,8 +337,7 @@ class BayesianModelSelector:
             avg_bf = np.mean(log_bfs)
             preferred = "Euler-Bernoulli" if avg_bf > 0 else "Timoshenko"
             guidelines["transition_rule"] = (
-                f"No clear transition found in studied range. "
-                f"{preferred} is generally preferred."
+                f"No clear transition found in studied range. {preferred} is generally preferred."
             )
 
         # Slender beam guideline

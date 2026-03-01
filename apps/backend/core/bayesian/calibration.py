@@ -15,26 +15,29 @@ Reference:
 - PyMC documentation: https://www.pymc.io/
 """
 
+from __future__ import annotations
+
 import logging
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 import arviz as az
 import numpy as np
 import pymc as pm
 
-from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
-
-logger = logging.getLogger(__name__)
-from apps.bayesian.normalization import (
+from apps.backend.core.bayesian.normalization import (
     NormalizationParams,
     compute_normalization_params,
 )
-from apps.data.synthetic_generator import SyntheticDataset
-from apps.models.euler_bernoulli import EulerBernoulliBeam
-from apps.models.timoshenko import TimoshenkoBeam
+from apps.backend.core.data.synthetic_generator import SyntheticDataset
+from apps.backend.core.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+from apps.backend.core.models.euler_bernoulli import EulerBernoulliBeam
+from apps.backend.core.models.timoshenko import TimoshenkoBeam
+
+logger = logging.getLogger(__name__)
 
 
 # Custom exceptions for convergence issues
@@ -45,6 +48,7 @@ class ConvergenceError(Exception):
     This indicates that the posterior samples are unreliable and
     any evidence calculations should not be trusted.
     """
+
     pass
 
 
@@ -55,6 +59,7 @@ class ConvergenceWarning(UserWarning):
     Raised when R-hat is elevated but not critically high,
     indicating results may have 10-20% error.
     """
+
     pass
 
 
@@ -71,7 +76,7 @@ class PriorConfig:
 
     param_name: str
     distribution: str
-    params: Dict[str, float]
+    params: dict[str, float]
 
 
 @dataclass
@@ -93,13 +98,13 @@ class CalibrationResult:
 
     model_name: str
     trace: az.InferenceData
-    posterior_summary: Dict  # Physical units
+    posterior_summary: dict  # Physical units
     log_likelihood: np.ndarray
-    waic: Optional[float] = None
-    marginal_likelihood_estimate: Optional[float] = None
-    convergence_diagnostics: Optional[Dict] = None
-    normalization_params: Optional[NormalizationParams] = None
-    posterior_summary_normalized: Optional[Dict] = None  # Normalized units
+    waic: float | None = None
+    marginal_likelihood_estimate: float | None = None
+    convergence_diagnostics: dict | None = None
+    normalization_params: NormalizationParams | None = None
+    posterior_summary_normalized: dict | None = None  # Normalized units
 
 
 class BayesianCalibrator(ABC):
@@ -113,7 +118,7 @@ class BayesianCalibrator(ABC):
 
     def __init__(
         self,
-        priors: List[PriorConfig],
+        priors: list[PriorConfig],
         n_samples: int = 2000,
         n_tune: int = 1000,
         n_chains: int = 4,
@@ -157,7 +162,7 @@ class BayesianCalibrator(ABC):
     @abstractmethod
     def _forward_model(
         self,
-        params: Dict[str, float],
+        params: dict[str, float],
         x_locations: np.ndarray,
         geometry: BeamGeometry,
         load: LoadCase,
@@ -283,12 +288,7 @@ class BayesianCalibrator(ABC):
                     )
 
             # Observation noise (in normalized space)
-            if "sigma" in params:
-                sigma = params["sigma"]
-            else:
-                # Fixed observation noise (normalized)
-                sigma = sigma_obs_norm
-
+            sigma = params.get("sigma", sigma_obs_norm)
             # Forward model prediction (in normalized space)
             if data_type == "strain":
                 y_pred = pm.Deterministic(
@@ -317,7 +317,7 @@ class BayesianCalibrator(ABC):
 
     def _pytensor_forward_normalized(
         self,
-        params: Dict,
+        params: dict,
         x: np.ndarray,
         geometry: BeamGeometry,
         load: LoadCase,
@@ -372,7 +372,7 @@ class BayesianCalibrator(ABC):
 
     def _pytensor_strain_forward_normalized(
         self,
-        params: Dict,
+        params: dict,
         x: np.ndarray,
         geometry: BeamGeometry,
         load: LoadCase,
@@ -437,9 +437,9 @@ class BayesianCalibrator(ABC):
             CalibrationResult with posterior samples and diagnostics
 
         """
-        print(f"\n{'='*60}")
-        print(f"Calibrating {self.model_name} model")
-        print(f"{'='*60}")
+        logger.info("=" * 60)
+        logger.info("Calibrating %s model", self.model_name)
+        logger.info("=" * 60)
 
         # Store dataset reference for bridge sampling
         self._calibration_data = data
@@ -461,7 +461,7 @@ class BayesianCalibrator(ABC):
                 # Better initialization to prevent stalling
                 init="adapt_diag",
                 # Run chains sequentially to avoid parallel init issues
-                cores=1,
+                cores=None,
                 # Disable sampling if stuck (nutpie-style timeout not available,
                 # but we limit tuning iterations)
                 initvals=self._get_initial_values(data),
@@ -507,9 +507,9 @@ class BayesianCalibrator(ABC):
 
     def _denormalize_posterior_summary(
         self,
-        summary_norm: Dict,
+        summary_norm: dict,
         normalizer: NormalizationParams,
-    ) -> Dict:
+    ) -> dict:
         """
         Convert posterior summary from normalized to physical units.
 
@@ -524,6 +524,7 @@ class BayesianCalibrator(ABC):
             Summary dict with values in physical units
         """
         import copy
+
         summary = copy.deepcopy(summary_norm)
 
         # Scale elastic modulus
@@ -545,9 +546,9 @@ class BayesianCalibrator(ABC):
     def _validate_convergence(
         self,
         trace: az.InferenceData,
-        convergence: Dict[str, Any],
+        convergence: dict[str, Any],
         strict: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Validate MCMC convergence and add diagnostics.
 
@@ -611,7 +612,7 @@ class BayesianCalibrator(ABC):
 
         return convergence
 
-    def _get_initial_values(self, data: SyntheticDataset) -> Dict:
+    def _get_initial_values(self, data: SyntheticDataset) -> dict:
         """
         Compute good initial values for MCMC to prevent stalling.
 
@@ -659,7 +660,7 @@ class BayesianCalibrator(ABC):
         if self._trace is None:
             raise ValueError("Must run calibrate() before computing marginal likelihood")
 
-        from apps.bayesian.bridge_sampling import BridgeSampler
+        from apps.backend.core.bayesian.bridge_sampling import BridgeSampler
 
         log_lik_func = self._build_log_likelihood_func()
         log_prior_func = self._build_log_prior_func()
@@ -690,7 +691,7 @@ class BayesianCalibrator(ABC):
         )
         return result.log_marginal_likelihood
 
-    def _get_param_names(self) -> List[str]:
+    def _get_param_names(self) -> list[str]:
         """Get parameter names used in MCMC (excluding derived quantities)."""
         var_names = list(self._trace.posterior.data_vars)
         return [v for v in var_names if v not in ["y_pred", "y_obs"] and not v.startswith("_")]
@@ -749,7 +750,11 @@ class BayesianCalibrator(ABC):
             # Gaussian log-likelihood
             residuals = y_obs_norm - y_pred_norm
             n = len(residuals)
-            ll = -0.5 * n * np.log(2 * np.pi) - n * np.log(sigma) - 0.5 * np.sum(residuals**2) / sigma**2
+            ll = (
+                -0.5 * n * np.log(2 * np.pi)
+                - n * np.log(sigma)
+                - 0.5 * np.sum(residuals**2) / sigma**2
+            )
             return float(ll)
 
         return log_likelihood
@@ -789,7 +794,7 @@ class BayesianCalibrator(ABC):
         def log_prior(params_array: np.ndarray) -> float:
             """Compute log p(θ) for a parameter vector."""
             lp = 0.0
-            for val, dist in zip(params_array, param_dists, strict=False):
+            for val, dist in zip(params_array, param_dists, strict=True):
                 lp += dist.logpdf(val)
             return float(lp)
 
@@ -810,7 +815,7 @@ class EulerBernoulliCalibrator(BayesianCalibrator):
 
     def _forward_model(
         self,
-        params: Dict[str, float],
+        params: dict[str, float],
         x_locations: np.ndarray,
         geometry: BeamGeometry,
         load: LoadCase,
@@ -831,7 +836,7 @@ class EulerBernoulliCalibrator(BayesianCalibrator):
 
     def _pytensor_forward_normalized(
         self,
-        params: Dict,
+        params: dict,
         x: np.ndarray,
         geometry: BeamGeometry,
         load: LoadCase,
@@ -879,7 +884,7 @@ class TimoshenkoCalibrator(BayesianCalibrator):
 
     def _forward_model(
         self,
-        params: Dict[str, float],
+        params: dict[str, float],
         x_locations: np.ndarray,
         geometry: BeamGeometry,
         load: LoadCase,
@@ -901,7 +906,7 @@ class TimoshenkoCalibrator(BayesianCalibrator):
 
     def _pytensor_forward_normalized(
         self,
-        params: Dict,
+        params: dict,
         x: np.ndarray,
         geometry: BeamGeometry,
         load: LoadCase,
@@ -946,9 +951,12 @@ class TimoshenkoCalibrator(BayesianCalibrator):
         return w_normalized
 
 
-def create_default_priors() -> List[PriorConfig]:
+def create_default_priors(config: dict | None = None) -> list[PriorConfig]:
     """
     Create default prior configurations for beam calibration.
+
+    If a config dict is provided, prior parameters are read from the
+    ``priors`` section, falling back to hard-coded defaults.
 
     IMPORTANT: Prior Selection Rationale
     ------------------------------------
@@ -961,28 +969,34 @@ def create_default_priors() -> List[PriorConfig]:
        - HalfNormal with small sigma for tight constraint
        - Typical displacement measurements: ~1e-6 m precision
 
+    Args:
+        config: Optional full configuration dict with a ``priors`` key.
+
     Returns:
         List of PriorConfig objects
-
     """
+    prior_cfg = (config or {}).get("priors", {})
+    e_cfg = prior_cfg.get("elastic_modulus", {})
+    noise_cfg = prior_cfg.get("observation_noise", {})
+
     return [
         PriorConfig(
             param_name="elastic_modulus",
-            distribution="lognormal",
+            distribution=e_cfg.get("distribution", "lognormal"),
             params={
-                "mu": np.log(210e9),  # ln(210 GPa) ≈ 26.07
-                "sigma": 0.05,  # ~5% uncertainty (tighter to prevent divergences)
+                "mu": e_cfg.get("mu", np.log(210e9)),
+                "sigma": e_cfg.get("sigma", 0.05),
             },
         ),
         PriorConfig(
             param_name="sigma",
-            distribution="halfnormal",
-            params={"sigma": 1e-6},  # Observation noise scale (tighter)
+            distribution=noise_cfg.get("distribution", "halfnormal"),
+            params={"sigma": noise_cfg.get("sigma", 1e-6)},
         ),
     ]
 
 
-def create_timoshenko_priors() -> List[PriorConfig]:
+def create_timoshenko_priors(config: dict | None = None) -> list[PriorConfig]:
     """
     Create priors for Timoshenko beam calibration.
 
@@ -993,15 +1007,20 @@ def create_timoshenko_priors() -> List[PriorConfig]:
     so WAIC/LOO will penalize this extra complexity via the effective
     number of parameters term.
 
+    Args:
+        config: Optional full configuration dict with a ``priors`` key.
     """
-    priors = create_default_priors()
+    priors = create_default_priors(config)
+    prior_cfg = (config or {}).get("priors", {})
+    nu_cfg = prior_cfg.get("poisson_ratio", {})
+
     priors.append(
         PriorConfig(
             param_name="poisson_ratio",
-            distribution="normal",  # Changed from uniform for better sampling
+            distribution=nu_cfg.get("distribution", "normal"),
             params={
-                "mu": 0.3,      # Steel typical value
-                "sigma": 0.03,  # Tight prior: most metals 0.25-0.35
+                "mu": nu_cfg.get("mu", 0.3),
+                "sigma": nu_cfg.get("sigma", 0.05),
             },
         )
     )

@@ -2,16 +2,17 @@
 Logging Setup Utilities.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Optional
 
 from rich.logging import RichHandler
 
 
 def setup_logging(
     level: int = logging.INFO,
-    log_file: Optional[Path] = None,
+    log_file: Path | None = None,
 ) -> None:
     """
     Configure logging for the application.

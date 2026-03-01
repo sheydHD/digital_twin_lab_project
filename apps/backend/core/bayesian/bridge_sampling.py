@@ -26,9 +26,11 @@ Reference:
 - Meng & Wong (1996) "Simulating Ratios of Normalizing Constants"
 """
 
+from __future__ import annotations
+
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Tuple
 
 import arviz as az
 import numpy as np
@@ -54,7 +56,7 @@ class BridgeSamplingResult:
     standard_error: float
     n_iterations: int
     converged: bool
-    proposal_fit: Optional[Dict] = None
+    proposal_fit: dict | None = None
 
     def __repr__(self) -> str:
         return (
@@ -76,9 +78,7 @@ class BridgeSampler:
 
     Example:
         >>> sampler = BridgeSampler(
-        ...     trace=pymc_trace,
-        ...     log_likelihood_func=my_log_lik,
-        ...     log_prior_func=my_log_prior
+        ...     trace=pymc_trace, log_likelihood_func=my_log_lik, log_prior_func=my_log_prior
         ... )
         >>> result = sampler.estimate()
         >>> print(f"Log marginal likelihood: {result.log_marginal_likelihood:.2f}")
@@ -89,10 +89,11 @@ class BridgeSampler:
         trace: az.InferenceData,
         log_likelihood_func: Callable[[np.ndarray], float],
         log_prior_func: Callable[[np.ndarray], float],
-        param_names: Optional[List[str]] = None,
+        param_names: list[str] | None = None,
         n_bridge_samples: int = 10000,
         tol: float = 1e-8,
         max_iter: int = 1000,
+        seed: int | None = None,
     ):
         """
         Initialize bridge sampler.
@@ -105,6 +106,7 @@ class BridgeSampler:
             n_bridge_samples: Samples from proposal distribution
             tol: Convergence tolerance
             max_iter: Maximum iterations
+            seed: Random seed for reproducible proposal sampling
         """
         self.trace = trace
         self.log_likelihood = log_likelihood_func
@@ -113,6 +115,7 @@ class BridgeSampler:
         self.n_bridge = n_bridge_samples
         self.tol = tol
         self.max_iter = max_iter
+        self._rng = np.random.default_rng(seed)
 
         # Will be computed during estimation
         self._posterior_samples = None
@@ -133,9 +136,7 @@ class BridgeSampler:
         n_posterior = len(self._posterior_samples)
         n_params = self._posterior_samples.shape[1]
 
-        logger.debug(
-            f"Extracted {n_posterior} posterior samples, {n_params} parameters"
-        )
+        logger.debug(f"Extracted {n_posterior} posterior samples, {n_params} parameters")
 
         # Fit proposal distribution (multivariate normal)
         self._proposal_mean, self._proposal_cov = self._fit_proposal()
@@ -145,7 +146,7 @@ class BridgeSampler:
 
         # Generate samples from proposal
         try:
-            proposal_samples = np.random.multivariate_normal(
+            proposal_samples = self._rng.multivariate_normal(
                 self._proposal_mean,
                 self._proposal_cov,
                 size=self.n_bridge,
@@ -154,7 +155,7 @@ class BridgeSampler:
             # Covariance not positive definite, add regularization
             logger.warning("Proposal covariance not positive definite, adding regularization")
             reg_cov = self._proposal_cov + 1e-6 * np.eye(n_params)
-            proposal_samples = np.random.multivariate_normal(
+            proposal_samples = self._rng.multivariate_normal(
                 self._proposal_mean, reg_cov, size=self.n_bridge
             )
 
@@ -198,8 +199,7 @@ class BridgeSampler:
         )
 
         logger.info(
-            f"Bridge sampling complete: log_ML={log_ml:.4f}, "
-            f"SE={se:.4f}, converged={converged}"
+            f"Bridge sampling complete: log_ML={log_ml:.4f}, SE={se:.4f}, converged={converged}"
         )
 
         return BridgeSamplingResult(
@@ -219,9 +219,7 @@ class BridgeSampler:
             var_names = list(self.trace.posterior.data_vars)
             # Exclude deterministic/derived quantities
             var_names = [
-                v for v in var_names
-                if v not in ["y_pred", "y_obs"]
-                and not v.startswith("_")
+                v for v in var_names if v not in ["y_pred", "y_obs"] and not v.startswith("_")
             ]
         else:
             var_names = self.param_names
@@ -238,7 +236,7 @@ class BridgeSampler:
 
         return np.column_stack(samples)
 
-    def _fit_proposal(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _fit_proposal(self) -> tuple[np.ndarray, np.ndarray]:
         """Fit multivariate normal proposal to posterior samples."""
         mean = np.mean(self._posterior_samples, axis=0)
         cov = np.cov(self._posterior_samples, rowvar=False)
@@ -254,7 +252,7 @@ class BridgeSampler:
 
         return mean, cov
 
-    def _assess_proposal_fit(self) -> Dict:
+    def _assess_proposal_fit(self) -> dict:
         """Assess how well the proposal fits the posterior."""
         # Compute Mahalanobis distances
         diff = self._posterior_samples - self._proposal_mean
@@ -335,7 +333,7 @@ class BridgeSampler:
         log_prop_prop: np.ndarray,
         n1: int,
         n2: int,
-    ) -> Tuple[float, int, bool]:
+    ) -> tuple[float, int, bool]:
         """
         Iterative bridge sampling algorithm.
 
@@ -356,7 +354,9 @@ class BridgeSampler:
         log_ml = float(np.median(log_post_unnorm))
 
         converged = False
-        for i in range(self.max_iter):
+        n_iters = 0
+        for _it in range(self.max_iter):
+            n_iters += 1
             log_ml_old = log_ml
 
             # Numerator: E_proposal[l(θ) / (s1*l(θ) + s2*g(θ)*exp(log_ml))]
@@ -387,7 +387,7 @@ class BridgeSampler:
                 f"Final change: {abs(log_ml - log_ml_old):.2e}"
             )
 
-        return log_ml, i + 1, converged
+        return log_ml, n_iters, converged
 
     def _estimate_standard_error(
         self,
@@ -455,10 +455,11 @@ def compute_bayes_factor_bridge(
     log_lik_func2: Callable,
     log_prior_func1: Callable,
     log_prior_func2: Callable,
-    param_names1: Optional[List[str]] = None,
-    param_names2: Optional[List[str]] = None,
+    param_names1: list[str] | None = None,
+    param_names2: list[str] | None = None,
     n_bridge_samples: int = 10000,
-) -> Tuple[float, float, BridgeSamplingResult, BridgeSamplingResult]:
+    seed: int | None = None,
+) -> tuple[float, float, BridgeSamplingResult, BridgeSamplingResult]:
     """
     Compute Bayes factor using bridge sampling for both models.
 
@@ -488,6 +489,7 @@ def compute_bayes_factor_bridge(
         log_prior_func1,
         param_names1,
         n_bridge_samples,
+        seed=seed,
     )
     sampler2 = BridgeSampler(
         trace2,
@@ -495,6 +497,7 @@ def compute_bayes_factor_bridge(
         log_prior_func2,
         param_names2,
         n_bridge_samples,
+        seed=seed,
     )
 
     result1 = sampler1.estimate()
@@ -504,8 +507,7 @@ def compute_bayes_factor_bridge(
     combined_se = np.sqrt(result1.standard_error**2 + result2.standard_error**2)
 
     logger.info(
-        f"Bayes factor: log_BF = {log_bf:.4f} ± {combined_se:.4f} "
-        f"(BF = {np.exp(log_bf):.2f})"
+        f"Bayes factor: log_BF = {log_bf:.4f} ± {combined_se:.4f} (BF = {np.exp(log_bf):.2f})"
     )
 
     return log_bf, combined_se, result1, result2

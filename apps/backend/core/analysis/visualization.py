@@ -9,21 +9,22 @@ Provides plotting functions for:
 - Practical guideline summaries
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-from apps.bayesian.calibration import CalibrationResult, PriorConfig
-from apps.bayesian.model_selection import ModelComparisonResult
-from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
-from apps.models.euler_bernoulli import EulerBernoulliBeam
-from apps.models.timoshenko import TimoshenkoBeam
+from apps.backend.core.bayesian.calibration import CalibrationResult, PriorConfig
+from apps.backend.core.bayesian.model_selection import ModelComparisonResult
+from apps.backend.core.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+from apps.backend.core.models.euler_bernoulli import EulerBernoulliBeam
+from apps.backend.core.models.timoshenko import TimoshenkoBeam
 
 # Set default style
-plt.style.use('seaborn-v0_8-whitegrid')
+plt.style.use("seaborn-v0_8-whitegrid")
 sns.set_palette("husl")
 
 
@@ -47,6 +48,11 @@ class BeamVisualization:
         self.figsize = (10, 6)
         self.dpi = 150
 
+    def _save_fig(self, fig: plt.Figure, filename: str) -> None:
+        """Save a figure, ensuring the output directory exists."""
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches="tight")
+
     def plot_beam_comparison(
         self,
         geometry: BeamGeometry,
@@ -54,8 +60,8 @@ class BeamVisualization:
         load: LoadCase,
         n_points: int = 100,
         show_data: bool = False,
-        data_x: Optional[np.ndarray] = None,
-        data_y: Optional[np.ndarray] = None,
+        data_x: np.ndarray | None = None,
+        data_y: np.ndarray | None = None,
         save: bool = True,
         filename: str = "beam_comparison.png",
     ) -> plt.Figure:
@@ -90,45 +96,100 @@ class BeamVisualization:
         fig, ax = plt.subplots(figsize=self.figsize)
 
         # Plot deflections
-        ax.plot(x * 1000, w_eb * 1000, 'b-', linewidth=2, label='Euler-Bernoulli')
-        ax.plot(x * 1000, w_timo * 1000, 'r--', linewidth=2, label='Timoshenko')
+        ax.plot(x * 1000, w_eb * 1000, "b-", linewidth=2, label="Euler-Bernoulli")
+        ax.plot(x * 1000, w_timo * 1000, "r--", linewidth=2, label="Timoshenko")
 
         # Plot data points if provided
         if show_data and data_x is not None and data_y is not None:
-            ax.scatter(data_x * 1000, data_y * 1000, c='k', s=50, marker='o',
-                      label='Measurements', zorder=5)
+            ax.scatter(
+                data_x * 1000,
+                data_y * 1000,
+                c="k",
+                s=50,
+                marker="o",
+                label="Measurements",
+                zorder=5,
+            )
 
         # Labels and formatting
-        ax.set_xlabel('Position along beam [mm]', fontsize=12)
-        ax.set_ylabel('Deflection [mm]', fontsize=12)
-        ax.set_title(
-            f'Beam Deflection Comparison (L/h = {geometry.aspect_ratio:.1f})',
-            fontsize=14
-        )
+        ax.set_xlabel("Position along beam [mm]", fontsize=12)
+        ax.set_ylabel("Deflection [mm]", fontsize=12)
+        ax.set_title(f"Beam Deflection Comparison (L/h = {geometry.aspect_ratio:.1f})", fontsize=14)
         ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
 
         # Add info text
         info_text = (
-            f'L = {geometry.length*1000:.1f} mm\n'
-            f'h = {geometry.height*1000:.1f} mm\n'
-            f'E = {material.elastic_modulus/1e9:.0f} GPa\n'
-            f'P = {load.point_load:.0f} N'
+            f"L = {geometry.length * 1000:.1f} mm\n"
+            f"h = {geometry.height * 1000:.1f} mm\n"
+            f"E = {material.elastic_modulus / 1e9:.0f} GPa\n"
+            f"P = {load.point_load:.0f} N"
         )
-        ax.text(0.02, 0.98, info_text, transform=ax.transAxes,
-               fontsize=9, verticalalignment='top',
-               bbox={'boxstyle': 'round', 'facecolor': 'wheat', 'alpha': 0.5})
+        ax.text(
+            0.02,
+            0.98,
+            info_text,
+            transform=ax.transAxes,
+            fontsize=9,
+            verticalalignment="top",
+            bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
+        )
 
         plt.tight_layout()
 
         if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+            self._save_fig(fig, filename)
+
+        return fig
+
+    def plot_waic_comparison(
+        self,
+        study_results: dict,
+        eb_results: list,
+        tim_results: list,
+        save: bool = True,
+        filename: str = "waic_comparison.png",
+    ) -> plt.Figure:
+        """
+        Plot WAIC comparison results.
+
+        Args:
+            eb_results: List of Euler-Bernoulli calibration results
+            tim_results: List of Timoshenko calibration results
+            save: Whether to save
+            filename: Output filename
+
+        Returns:
+            Matplotlib figure
+
+        """
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Extract WAIC_elpd values for each model (already saved only as elpd parts of WAIC in results)
+        eb_waics = [r.waic for r in eb_results]
+        timo_waics = [r.waic for r in tim_results]
+
+        # Compute ELPD differences (EB - Timo)
+        elpd_diffs = [t - e for t, e in zip(eb_waics, timo_waics, strict=True)]
+
+        aspect_ratios = study_results["aspect_ratios"]
+        # Create bar chart
+        ax.plot(aspect_ratios, elpd_diffs, "bo-", linewidth=2, markersize=10)
+        ax.axhline(y=0, color="k", linestyle="-", linewidth=1)
+
+        ax.set_xlabel("Aspect Ratio (L/h)", fontsize=12)
+        ax.set_ylabel("Δ ELPD (EB - Timo)", fontsize=12)
+        ax.set_title("ELPD WAIC Comparison Across Models", fontsize=14)
+        ax.grid(True, alpha=0.3)
+
+        if save:
+            self._save_fig(fig, filename)
 
         return fig
 
     def plot_deflection_error(
         self,
-        aspect_ratios: List[float],
+        aspect_ratios: list[float],
         base_length: float,
         material: MaterialProperties,
         load: LoadCase,
@@ -173,35 +234,35 @@ class BeamVisualization:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
         # Tip deflection error
-        ax1.semilogy(aspect_ratios, tip_errors, 'bo-', linewidth=2, markersize=8)
-        ax1.axhline(y=5, color='r', linestyle='--', label='5% threshold')
-        ax1.axhline(y=1, color='g', linestyle='--', label='1% threshold')
-        ax1.set_xlabel('Aspect Ratio (L/h)', fontsize=12)
-        ax1.set_ylabel('Relative Error [%]', fontsize=12)
-        ax1.set_title('Euler-Bernoulli Error vs Timoshenko', fontsize=14)
+        ax1.semilogy(aspect_ratios, tip_errors, "bo-", linewidth=2, markersize=8)
+        ax1.axhline(y=5, color="r", linestyle="--", label="5% threshold")
+        ax1.axhline(y=1, color="g", linestyle="--", label="1% threshold")
+        ax1.set_xlabel("Aspect Ratio (L/h)", fontsize=12)
+        ax1.set_ylabel("Relative Error [%]", fontsize=12)
+        ax1.set_title("Euler-Bernoulli Error vs Timoshenko", fontsize=14)
         ax1.legend()
         ax1.grid(True, alpha=0.3)
 
         # Shear deformation contribution
-        ax2.plot(aspect_ratios, shear_ratios, 'rs-', linewidth=2, markersize=8)
-        ax2.set_xlabel('Aspect Ratio (L/h)', fontsize=12)
-        ax2.set_ylabel('Shear Deflection / Total Deflection [%]', fontsize=12)
-        ax2.set_title('Shear Deformation Contribution', fontsize=14)
+        ax2.plot(aspect_ratios, shear_ratios, "rs-", linewidth=2, markersize=8)
+        ax2.set_xlabel("Aspect Ratio (L/h)", fontsize=12)
+        ax2.set_ylabel("Shear Deflection / Total Deflection [%]", fontsize=12)
+        ax2.set_title("Shear Deformation Contribution", fontsize=14)
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
 
         if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+            self._save_fig(fig, filename)
 
         return fig
 
     def plot_prior_posterior_comparison(
         self,
         result: CalibrationResult,
-        priors: List[PriorConfig],
+        priors: list[PriorConfig],
         save: bool = True,
-        filename: Optional[str] = None,
+        filename: str | None = None,
     ) -> plt.Figure:
         """
         Plot prior and posterior distributions overlaid for comparison.
@@ -231,10 +292,10 @@ class BeamVisualization:
         if n_params == 1:
             axes = [axes]
 
-        prior_color = '#E57373'   # red-ish for prior
-        post_color = '#42A5F5'    # blue for posterior
+        prior_color = "#E57373"  # red-ish for prior
+        post_color = "#42A5F5"  # blue for posterior
 
-        for ax, prior in zip(axes, priors, strict=False):
+        for ax, prior in zip(axes, priors, strict=True):
             name = prior.param_name
 
             # Get posterior samples
@@ -245,6 +306,7 @@ class BeamVisualization:
 
             # Plot posterior as KDE
             from scipy.stats import gaussian_kde
+
             kde = gaussian_kde(post_samples)
             x_min, x_max = post_samples.min(), post_samples.max()
             margin = (x_max - x_min) * 0.3
@@ -279,40 +341,47 @@ class BeamVisualization:
             scale = prior_max / post_max if post_max > 0 else 1.0
 
             ax.fill_between(x_prior, prior_pdf, alpha=0.2, color=prior_color)
-            ax.plot(x_prior, prior_pdf, color=prior_color, linewidth=2,
-                    linestyle='--', label='Prior')
+            ax.plot(
+                x_prior, prior_pdf, color=prior_color, linewidth=2, linestyle="--", label="Prior"
+            )
 
             ax.fill_between(x_post, post_pdf * scale, alpha=0.3, color=post_color)
-            ax.plot(x_post, post_pdf * scale, color=post_color, linewidth=2,
-                    label='Posterior')
+            ax.plot(x_post, post_pdf * scale, color=post_color, linewidth=2, label="Posterior")
 
             if true_val is not None:
-                ax.axvline(true_val, color='#2E7D32', linestyle=':',
-                          linewidth=1.5, label=f'True = {true_val}')
+                ax.axvline(
+                    true_val,
+                    color="#2E7D32",
+                    linestyle=":",
+                    linewidth=1.5,
+                    label=f"True = {true_val}",
+                )
 
             # Add posterior summary text
             post_mean = float(np.mean(post_samples))
             post_std = float(np.std(post_samples))
-            ax.text(0.97, 0.97,
-                    f"μ = {post_mean:.4f}\nσ = {post_std:.4f}",
-                    transform=ax.transAxes, fontsize=9,
-                    verticalalignment='top', horizontalalignment='right',
-                    bbox={'boxstyle': 'round', 'facecolor': 'white', 'alpha': 0.8})
+            ax.text(
+                0.97,
+                0.97,
+                f"μ = {post_mean:.4f}\nσ = {post_std:.4f}",
+                transform=ax.transAxes,
+                fontsize=9,
+                verticalalignment="top",
+                horizontalalignment="right",
+                bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
+            )
 
             ax.set_xlabel(xlabel, fontsize=11)
             ax.set_ylabel("Density (scaled)", fontsize=11)
             ax.set_title(f"{name}", fontsize=12)
-            ax.legend(fontsize=9, loc='upper left')
+            ax.legend(fontsize=9, loc="upper left")
             ax.grid(True, alpha=0.3)
 
-        plt.suptitle(
-            f"Prior vs Posterior: {result.model_name}",
-            fontsize=14, y=1.02
-        )
+        plt.suptitle(f"Prior vs Posterior: {result.model_name}", fontsize=14, y=1.02)
         plt.tight_layout()
 
         if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+            self._save_fig(fig, filename)
 
         return fig
 
@@ -339,24 +408,30 @@ class BeamVisualization:
         # Posterior model probabilities
         models = [comparison.model1_name, comparison.model2_name]
         probs = [comparison.model1_probability, comparison.model2_probability]
-        colors = ['steelblue', 'coral']
+        colors = ["steelblue", "coral"]
 
-        bars = ax1.bar(models, probs, color=colors, edgecolor='black', linewidth=2)
-        ax1.set_ylabel('Posterior Probability', fontsize=12)
-        ax1.set_title('Model Posterior Probabilities', fontsize=14)
+        bars = ax1.bar(models, probs, color=colors, edgecolor="black", linewidth=2)
+        ax1.set_ylabel("Posterior Probability", fontsize=12)
+        ax1.set_title("Model Posterior Probabilities", fontsize=14)
         ax1.set_ylim(0, 1)
-        ax1.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
+        ax1.axhline(y=0.5, color="gray", linestyle="--", alpha=0.5)
 
         # Add probability labels on bars
-        for bar, prob in zip(bars, probs, strict=False):
-            ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                    f'{prob:.2%}', ha='center', va='bottom', fontsize=11)
+        for bar, prob in zip(bars, probs, strict=True):
+            ax1.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.02,
+                f"{prob:.2%}",
+                ha="center",
+                va="bottom",
+                fontsize=11,
+            )
 
         # Evidence interpretation
-        ax2.axis('off')
+        ax2.axis("off")
         info_text = (
             f"Model Comparison Summary\n"
-            f"{'='*40}\n\n"
+            f"{'=' * 40}\n\n"
             f"Log Bayes Factor: {comparison.log_bayes_factor:.2f}\n"
             f"Bayes Factor: {comparison.bayes_factor:.2f}\n\n"
             f"Evidence: {comparison.evidence_interpretation.value}\n\n"
@@ -366,21 +441,27 @@ class BeamVisualization:
         if comparison.waic_difference is not None:
             info_text += f"\nΔWAIC: {comparison.waic_difference:.2f}"
 
-        ax2.text(0.1, 0.5, info_text, transform=ax2.transAxes,
-                fontsize=12, verticalalignment='center',
-                family='monospace',
-                bbox={'boxstyle': 'round', 'facecolor': 'wheat', 'alpha': 0.8})
+        ax2.text(
+            0.1,
+            0.5,
+            info_text,
+            transform=ax2.transAxes,
+            fontsize=12,
+            verticalalignment="center",
+            family="monospace",
+            bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.8},
+        )
 
         plt.tight_layout()
 
         if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+            self._save_fig(fig, filename)
 
         return fig
 
     def plot_aspect_ratio_study(
         self,
-        study_results: Dict,
+        study_results: dict,
         save: bool = True,
         filename: str = "aspect_ratio_study.png",
     ) -> plt.Figure:
@@ -403,29 +484,34 @@ class BeamVisualization:
         fig, ax1 = plt.subplots(figsize=(10, 6))
 
         # Log Bayes Factor vs Aspect Ratio
-        ax1.plot(aspect_ratios, log_bfs, 'bo-', linewidth=2, markersize=10)
-        ax1.axhline(y=0, color='k', linestyle='-', linewidth=1)
+        ax1.plot(aspect_ratios, log_bfs, "bo-", linewidth=2, markersize=10)
+        ax1.axhline(y=0, color="k", linestyle="-", linewidth=1)
 
         # Shade regions
-        ax1.axhspan(np.log(3), np.log(10), alpha=0.2, color='blue', label='Weak EB')
-        ax1.axhspan(np.log(10), max(log_bfs) + 1, alpha=0.2, color='blue')
-        ax1.axhspan(-np.log(3), -np.log(10), alpha=0.2, color='red', label='Weak Timo')
-        ax1.axhspan(-np.log(10), min(log_bfs) - 1, alpha=0.2, color='red')
+        ax1.axhspan(np.log(3), np.log(10), alpha=0.2, color="blue", label="Weak EB")
+        ax1.axhspan(np.log(10), max(log_bfs) + 1, alpha=0.2, color="blue")
+        ax1.axhspan(-np.log(3), -np.log(10), alpha=0.2, color="red", label="Weak Timo")
+        ax1.axhspan(-np.log(10), min(log_bfs) - 1, alpha=0.2, color="red")
 
         if transition:
-            ax1.axvline(x=transition, color='green', linestyle='--',
-                       linewidth=2, label=f'Transition: L/h={transition:.1f}')
+            ax1.axvline(
+                x=transition,
+                color="green",
+                linestyle="--",
+                linewidth=2,
+                label=f"Transition: L/h={transition:.1f}",
+            )
 
-        ax1.set_xlabel('Aspect Ratio (L/h)', fontsize=12)
-        ax1.set_ylabel('Log Bayes Factor', fontsize=12)
-        ax1.set_title('Model Evidence vs Beam Slenderness', fontsize=14)
-        ax1.legend(loc='best')
+        ax1.set_xlabel("Aspect Ratio (L/h)", fontsize=12)
+        ax1.set_ylabel("Log Bayes Factor", fontsize=12)
+        ax1.set_title("Model Evidence vs Beam Slenderness", fontsize=14)
+        ax1.legend(loc="best")
         ax1.grid(True, alpha=0.3)
 
         plt.tight_layout()
 
         if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+            self._save_fig(fig, filename)
 
         return fig
 
@@ -463,27 +549,27 @@ class BeamVisualization:
 
         # Frequency comparison
         width = 0.35
-        ax1.bar(modes - width/2, freq_eb, width, label='Euler-Bernoulli', color='steelblue')
-        ax1.bar(modes + width/2, freq_timo, width, label='Timoshenko', color='coral')
-        ax1.set_xlabel('Mode Number', fontsize=12)
-        ax1.set_ylabel('Natural Frequency [Hz]', fontsize=12)
-        ax1.set_title(f'Natural Frequencies (L/h = {geometry.aspect_ratio:.1f})', fontsize=14)
+        ax1.bar(modes - width / 2, freq_eb, width, label="Euler-Bernoulli", color="steelblue")
+        ax1.bar(modes + width / 2, freq_timo, width, label="Timoshenko", color="coral")
+        ax1.set_xlabel("Mode Number", fontsize=12)
+        ax1.set_ylabel("Natural Frequency [Hz]", fontsize=12)
+        ax1.set_title(f"Natural Frequencies (L/h = {geometry.aspect_ratio:.1f})", fontsize=14)
         ax1.legend()
         ax1.set_xticks(modes)
 
         # Frequency ratio
         freq_ratio = freq_timo / freq_eb
-        ax2.plot(modes, freq_ratio * 100, 'go-', linewidth=2, markersize=10)
-        ax2.axhline(y=100, color='k', linestyle='--', alpha=0.5)
-        ax2.set_xlabel('Mode Number', fontsize=12)
-        ax2.set_ylabel('Timoshenko / Euler-Bernoulli [%]', fontsize=12)
-        ax2.set_title('Frequency Ratio', fontsize=14)
+        ax2.plot(modes, freq_ratio * 100, "go-", linewidth=2, markersize=10)
+        ax2.axhline(y=100, color="k", linestyle="--", alpha=0.5)
+        ax2.set_xlabel("Mode Number", fontsize=12)
+        ax2.set_ylabel("Timoshenko / Euler-Bernoulli [%]", fontsize=12)
+        ax2.set_title("Frequency Ratio", fontsize=14)
         ax2.set_xticks(modes)
         ax2.grid(True, alpha=0.3)
 
         plt.tight_layout()
 
         if save:
-            fig.savefig(self.output_dir / filename, dpi=self.dpi, bbox_inches='tight')
+            self._save_fig(fig, filename)
 
         return fig

@@ -10,14 +10,20 @@ The synthetic data serves as "ground truth" observations for:
 - Validating Bayesian inference procedures
 """
 
+from __future__ import annotations
+
+import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import h5py
 import numpy as np
 
-from apps.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+from apps.backend.core.models.base_beam import BeamGeometry, LoadCase, MaterialProperties
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,7 +40,7 @@ class SensorConfiguration:
 
     displacement_locations: np.ndarray
     strain_locations: np.ndarray
-    strain_y_positions: Optional[np.ndarray] = None
+    strain_y_positions: np.ndarray | None = None
     sampling_frequency: float = 1000.0
 
     def __post_init__(self):
@@ -59,8 +65,8 @@ class NoiseModel:
     displacement_std: float = 1e-6  # 1 μm
     strain_std: float = 1e-6  # 1 microstrain
     relative_noise: bool = False
-    noise_fraction: float = 0.001 # 2% relative noise if relative_noise=True
-    seed: Optional[int] = 42
+    noise_fraction: float = 0.001  # 2% relative noise if relative_noise=True
+    seed: int | None = 42
 
 
 @dataclass
@@ -92,7 +98,7 @@ class SyntheticDataset:
     y_strain: np.ndarray
     strains: np.ndarray
     strain_noise_std: float
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
 
 class SyntheticDataGenerator:
@@ -111,7 +117,7 @@ class SyntheticDataGenerator:
         self,
         sensors: SensorConfiguration,
         noise: NoiseModel,
-        fem_refinement: Tuple[int, int] = (40, 8),
+        fem_refinement: tuple[int, int] = (40, 8),
     ):
         """
         Initialize the synthetic data generator.
@@ -125,9 +131,9 @@ class SyntheticDataGenerator:
         self.noise = noise
         self.fem_nx, self.fem_ny = fem_refinement
 
-        # Set random seed
-        if noise.seed is not None:
-            np.random.seed(noise.seed)
+        # NOTE: self._rng is for single-threaded use only.
+        # generate_parametric_study creates per-call RNGs for thread safety.
+        self._rng = np.random.default_rng(noise.seed)
 
     def _get_n_beam_elements(self, geometry: BeamGeometry) -> int:
         """
@@ -151,9 +157,17 @@ class SyntheticDataGenerator:
         geometry: BeamGeometry,
         material: MaterialProperties,
         load: LoadCase,
+        *,
+        sensors: SensorConfiguration | None = None,
+        rng: np.random.Generator | None = None,
     ) -> SyntheticDataset:
-        """
-        Generate synthetic static measurement data using 1D Timoshenko beam FEM.
+        """Generate synthetic static measurement data using 1D Timoshenko beam FEM.
+
+        ``sensors`` and ``rng`` are optional overrides that allow the method to
+        be called concurrently from multiple threads: callers that need
+        thread-safety should supply a freshly-created ``SensorConfiguration``
+        and an independent ``np.random.Generator`` rather than relying on the
+        shared ``self.sensors`` / ``self._rng`` attributes.
 
         IMPORTANT - Ground Truth Physics:
         ---------------------------------
@@ -172,11 +186,15 @@ class SyntheticDataGenerator:
             geometry: Beam geometry
             material: Material properties
             load: Load case (point load, distributed load, or moment)
+            sensors: Sensor configuration to use (defaults to ``self.sensors``)
+            rng: Random number generator to use (defaults to ``self._rng``)
 
         Returns:
             SyntheticDataset with measurements
         """
-        from apps.fem.beam_fem import TimoshenkoBeamFEM
+        _sensors = sensors if sensors is not None else self.sensors
+        _rng = rng if rng is not None else self._rng
+        from apps.backend.core.fem.beam_fem import TimoshenkoBeamFEM
 
         # Get number of beam elements
         n_elem = self._get_n_beam_elements(geometry)
@@ -199,13 +217,13 @@ class SyntheticDataGenerator:
         )
 
         # Get deflections at sensor locations
-        w_sensors = result.get_deflection_at(self.sensors.displacement_locations)
+        w_sensors = result.get_deflection_at(_sensors.displacement_locations)
 
         # Add noise to displacements
         disp_noise_std = self._compute_noise_level(
             w_sensors, self.noise.displacement_std, is_displacement=True
         )
-        w_noisy = w_sensors + np.random.normal(0, disp_noise_std, w_sensors.shape)
+        w_noisy = w_sensors + _rng.normal(0, disp_noise_std, w_sensors.shape)
 
         # Compute strains from beam theory: ε = -y * d²w/dx² ≈ -y * M/(EI)
         # For cantilever with point load: M(x) = P*(L-x), so ε = -y*P*(L-x)/(EI)
@@ -216,7 +234,7 @@ class SyntheticDataGenerator:
         L = geometry.length
         y_surface = geometry.height / 2
 
-        x_strain = self.sensors.strain_locations
+        x_strain = _sensors.strain_locations
         M_x = P * (L - x_strain)  # Moment at strain gauge locations
         eps_sensors = -y_surface * M_x / (E * I)  # Axial strain at top surface
 
@@ -224,16 +242,16 @@ class SyntheticDataGenerator:
         strain_noise_std = self._compute_noise_level(
             eps_sensors, self.noise.strain_std, is_displacement=False
         )
-        eps_noisy = eps_sensors + np.random.normal(0, strain_noise_std, eps_sensors.shape)
+        eps_noisy = eps_sensors + _rng.normal(0, strain_noise_std, eps_sensors.shape)
 
         return SyntheticDataset(
             geometry=geometry,
             material=material,
             load_case=load,
-            x_disp=self.sensors.displacement_locations.copy(),
+            x_disp=_sensors.displacement_locations.copy(),
             displacements=w_noisy,
             displacement_noise_std=disp_noise_std,
-            x_strain=self.sensors.strain_locations.copy(),
+            x_strain=_sensors.strain_locations.copy(),
             y_strain=np.array([geometry.height / 2]),  # Top surface
             strains=eps_noisy,
             strain_noise_std=strain_noise_std,
@@ -269,18 +287,27 @@ class SyntheticDataGenerator:
 
     def generate_parametric_study(
         self,
-        aspect_ratios: List[float],
+        aspect_ratios: list[float],
         base_length: float,
         base_material: MaterialProperties,
         base_load: LoadCase,
         width: float = 0.1,
-    ) -> List[SyntheticDataset]:
-        """
-        Generate datasets for multiple beam aspect ratios.
+    ) -> list[SyntheticDataset]:
+        """Generate datasets for multiple beam aspect ratios in parallel.
 
-        This is the core data generation for the model selection study,
-        creating synthetic measurements for beams ranging from slender
-        (Euler-Bernoulli valid) to thick (Timoshenko required).
+        Each FEM solve is a pure-numpy / CPU-bound computation that releases
+        the GIL via NumPy’s BLAS/LAPACK back-ends, so a ``ThreadPoolExecutor``
+        achieves genuine parallelism without the overhead of spawning full
+        sub-processes.
+
+        Thread-safety considerations
+        ----------------------------
+        * A *per-task* ``SensorConfiguration`` is created for each aspect ratio
+          so no thread ever mutates ``self.sensors`` — previously the call to
+          ``self._scale_sensors(length)`` was a hidden data-race.
+        * A *per-task* ``np.random.Generator`` is derived from the base seed
+          (``seed + task_idx``) so results are deterministic regardless of
+          execution order, and no thread shares an RNG.
 
         Args:
             aspect_ratios: List of L/h ratios to study
@@ -290,53 +317,50 @@ class SyntheticDataGenerator:
             width: Beam width [m]
 
         Returns:
-            List of SyntheticDataset objects
-
+            List of SyntheticDataset objects in the same order as
+            ``aspect_ratios``.
         """
-        datasets = []
+        n_disp = len(self.sensors.displacement_locations)
+        n_strain = len(self.sensors.strain_locations)
 
-        for L_h in aspect_ratios:
-            # Compute height for given aspect ratio
+        def _task(args: tuple[int, float]) -> SyntheticDataset:
+            idx, L_h = args
+            if L_h <= 0:
+                msg = f"Aspect ratio must be positive, got {L_h}"
+                raise ValueError(msg)
+
             height = base_length / L_h
+            if height <= 0:
+                msg = f"Computed beam height must be positive, got {height}"
+                raise ValueError(msg)
 
-            # Create geometry
-            geometry = BeamGeometry(
-                length=base_length,
-                height=height,
-                width=width,
+            geometry = BeamGeometry(length=base_length, height=height, width=width)
+
+            # Per-task sensor config: no shared mutable state, no data-race.
+            scaled_sensors = SensorConfiguration(
+                displacement_locations=np.linspace(0.2 * base_length, base_length, n_disp),
+                strain_locations=np.linspace(0.1 * base_length, 0.9 * base_length, n_strain),
             )
 
-            # Update sensor locations relative to beam length
-            self._scale_sensors(base_length)
+            # Per-task RNG: reproducible + independent across threads.
+            task_seed = None if self.noise.seed is None else self.noise.seed + idx
+            task_rng = np.random.default_rng(task_seed)
 
-            # Generate dataset
-            dataset = self.generate_static_dataset(
-                geometry=geometry,
-                material=base_material,
-                load=base_load,
+            ds = self.generate_static_dataset(
+                geometry,
+                base_material,
+                base_load,
+                sensors=scaled_sensors,
+                rng=task_rng,
             )
+            logger.info("Generated dataset for L/h = %.1f", L_h)
+            return ds
 
-            datasets.append(dataset)
-
-            print(f"Generated dataset for L/h = {L_h:.1f}")
+        max_workers = min(len(aspect_ratios), (os.cpu_count() or 1))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            datasets = list(pool.map(_task, enumerate(aspect_ratios)))
 
         return datasets
-
-    def _scale_sensors(self, length: float) -> None:
-        """
-        Scale sensor locations to beam length.
-
-        """
-        # Default: sensors at 20%, 40%, 60%, 80%, 100% of length
-        n_disp = len(self.sensors.displacement_locations)
-        self.sensors.displacement_locations = np.linspace(
-            0.2 * length, length, n_disp
-        )
-
-        n_strain = len(self.sensors.strain_locations)
-        self.sensors.strain_locations = np.linspace(
-            0.1 * length, 0.9 * length, n_strain
-        )
 
 
 def save_dataset(dataset: SyntheticDataset, filepath: Path) -> None:

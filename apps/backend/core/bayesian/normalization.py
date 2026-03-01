@@ -26,9 +26,11 @@ Reference:
 - PyMC Documentation: https://www.pymc.io/
 """
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 
@@ -58,7 +60,7 @@ class NormalizationParams:
     is_active: bool = False
 
     # Internal storage for diagnostics
-    _stats: Dict[str, Any] = field(default_factory=dict)
+    _stats: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         """Validate normalization parameters."""
@@ -81,7 +83,7 @@ class NormalizationParams:
 
 def compute_normalization_params(
     displacements: np.ndarray,
-    strains: Optional[np.ndarray] = None,
+    strains: np.ndarray | None = None,
     E_nominal: float = 210e9,
     method: str = "max_abs",
 ) -> NormalizationParams:
@@ -129,8 +131,7 @@ def compute_normalization_params(
     # Fallback for zero/tiny displacements
     if disp_scale < 1e-15:
         logger.warning(
-            f"Very small displacement scale ({disp_scale:.2e}), "
-            "using fallback of 1e-6 m"
+            f"Very small displacement scale ({disp_scale:.2e}), using fallback of 1e-6 m"
         )
         disp_scale = 1e-6
 
@@ -167,10 +168,7 @@ def compute_normalization_params(
         "method": method,
     }
 
-    logger.debug(
-        f"Computed normalization: disp_scale={disp_scale:.2e}, "
-        f"E_scale={E_nominal:.2e}"
-    )
+    logger.debug(f"Computed normalization: disp_scale={disp_scale:.2e}, E_scale={E_nominal:.2e}")
 
     return params
 
@@ -268,8 +266,8 @@ def create_normalizer_from_dataset(dataset) -> NormalizationParams:
     Returns:
         NormalizationParams computed from the dataset
     """
-    displacements = getattr(dataset, 'displacements', None)
-    strains = getattr(dataset, 'strains', None)
+    displacements = getattr(dataset, "displacements", None)
+    strains = getattr(dataset, "strains", None)
 
     if displacements is None or len(displacements) == 0:
         logger.warning("No displacements in dataset, using default normalization")

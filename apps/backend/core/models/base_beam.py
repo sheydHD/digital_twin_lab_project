@@ -4,9 +4,10 @@ Base beam model abstract class.
 Defines the interface for all beam theory implementations.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -27,8 +28,8 @@ class BeamGeometry:
     length: float
     height: float
     width: float
-    area: Optional[float] = None
-    moment_of_inertia: Optional[float] = None
+    area: float | None = None
+    moment_of_inertia: float | None = None
 
     def __post_init__(self):
         """Compute derived geometric properties."""
@@ -58,7 +59,7 @@ class MaterialProperties:
     """
 
     elastic_modulus: float
-    shear_modulus: Optional[float] = None
+    shear_modulus: float | None = None
     poisson_ratio: float = 0.3
     density: float = 7850.0  # Steel default
     shear_correction_factor: float = 5 / 6  # Rectangular section default
@@ -84,7 +85,7 @@ class LoadCase:
     point_load: float = 0.0
     distributed_load: float = 0.0
     moment: float = 0.0
-    frequency: Optional[float] = None
+    frequency: float | None = None
 
     @property
     def is_dynamic(self) -> bool:
@@ -256,5 +257,5 @@ class BaseBeamModel(ABC):
             f"L={self.geometry.length:.3f}m, "
             f"h={self.geometry.height:.3f}m, "
             f"L/h={self.geometry.aspect_ratio:.1f}, "
-            f"E={self.material.elastic_modulus/1e9:.1f}GPa)"
+            f"E={self.material.elastic_modulus / 1e9:.1f}GPa)"
         )

@@ -28,6 +28,7 @@ class BeamFEMResult:
         rotations: Cross-section rotations at nodes [rad]
         n_elements: Number of elements used
     """
+
     x: np.ndarray
     deflections: np.ndarray
     rotations: np.ndarray
@@ -62,7 +63,7 @@ class TimoshenkoBeamFEM:
         width: float,
         elastic_modulus: float,
         poisson_ratio: float,
-        shear_correction_factor: float = 5/6,
+        shear_correction_factor: float = 5 / 6,
         n_elements: int = 20,
     ):
         """
@@ -116,12 +117,14 @@ class TimoshenkoBeamFEM:
         # Reference: Cook et al., "Concepts and Applications of FEA"
         coeff = E * I / (L**3 * (1 + phi))
 
-        Ke = coeff * np.array([
-            [12,           6*L,          -12,          6*L],
-            [6*L,          (4+phi)*L**2, -6*L,         (2-phi)*L**2],
-            [-12,          -6*L,         12,           -6*L],
-            [6*L,          (2-phi)*L**2, -6*L,         (4+phi)*L**2]
-        ])
+        Ke = coeff * np.array(
+            [
+                [12, 6 * L, -12, 6 * L],
+                [6 * L, (4 + phi) * L**2, -6 * L, (2 - phi) * L**2],
+                [-12, -6 * L, 12, -6 * L],
+                [6 * L, (2 - phi) * L**2, -6 * L, (4 + phi) * L**2],
+            ]
+        )
 
         return Ke
 
@@ -133,7 +136,7 @@ class TimoshenkoBeamFEM:
         for e in range(self.n_elem):
             # Global DOF indices for element e
             # Node e has DOFs [2*e, 2*e+1], Node e+1 has DOFs [2*(e+1), 2*(e+1)+1]
-            dofs = [2*e, 2*e+1, 2*(e+1), 2*(e+1)+1]
+            dofs = [2 * e, 2 * e + 1, 2 * (e + 1), 2 * (e + 1) + 1]
 
             # Add element contribution
             for i in range(4):
@@ -172,7 +175,7 @@ class TimoshenkoBeamFEM:
         # Apply point load at tip (last node, w DOF)
         if point_load != 0:
             # Positive load causes negative (downward) deflection
-            F[2*(self.n_nodes-1)] = -point_load
+            F[2 * (self.n_nodes - 1)] = -point_load
 
         # Apply distributed load (consistent nodal loads)
         if distributed_load != 0:
@@ -181,7 +184,7 @@ class TimoshenkoBeamFEM:
             # Consistent nodal loads for uniform distributed load on beam element
             # For each element: F_w1 = qL/2, F_θ1 = qL²/12, F_w2 = qL/2, F_θ2 = -qL²/12
             for e in range(self.n_elem):
-                dofs = [2*e, 2*e+1, 2*(e+1), 2*(e+1)+1]
+                dofs = [2 * e, 2 * e + 1, 2 * (e + 1), 2 * (e + 1) + 1]
                 F[dofs[0]] -= q * Le / 2
                 F[dofs[1]] -= q * Le**2 / 12
                 F[dofs[2]] -= q * Le / 2
@@ -203,7 +206,7 @@ class TimoshenkoBeamFEM:
 
         # Extract deflections and rotations
         deflections = U[0::2]  # Even indices: w
-        rotations = U[1::2]    # Odd indices: θ
+        rotations = U[1::2]  # Odd indices: θ
 
         return BeamFEMResult(
             x=self.x_nodes.copy(),

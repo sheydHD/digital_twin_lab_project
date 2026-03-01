@@ -10,6 +10,8 @@ The Euler-Bernoulli beam theory assumes:
 This theory is accurate for long, slender beams where shear deformation is negligible.
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 from .base_beam import BaseBeamModel, BeamGeometry, LoadCase, MaterialProperties
@@ -204,8 +206,18 @@ class EulerBernoulliBeam(BaseBeamModel):
 
         # Known eigenvalues βn*L for cantilever beam (first 10 modes)
         # These satisfy: cos(βL)*cosh(βL) + 1 = 0
-        beta_L_approx = [1.8751, 4.6941, 7.8548, 10.9955, 14.1372,
-                        17.2788, 20.4204, 23.5619, 26.7035, 29.8451]
+        beta_L_approx = [
+            1.8751,
+            4.6941,
+            7.8548,
+            10.9955,
+            14.1372,
+            17.2788,
+            20.4204,
+            23.5619,
+            26.7035,
+            29.8451,
+        ]
 
         # For now, use approximate values
         frequencies = np.zeros(n_modes)

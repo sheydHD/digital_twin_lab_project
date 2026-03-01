@@ -17,6 +17,8 @@ The theory is more accurate for:
 - Sandwich and composite beams
 """
 
+from __future__ import annotations
+
 import numpy as np
 
 from .base_beam import BaseBeamModel, BeamGeometry, LoadCase, MaterialProperties
@@ -261,8 +263,18 @@ class TimoshenkoBeam(BaseBeamModel):
         kappa = self.material.shear_correction_factor
 
         # Euler-Bernoulli eigenvalues for reference
-        beta_L_eb = [1.8751, 4.6941, 7.8548, 10.9955, 14.1372,
-                    17.2788, 20.4204, 23.5619, 26.7035, 29.8451]
+        beta_L_eb = [
+            1.8751,
+            4.6941,
+            7.8548,
+            10.9955,
+            14.1372,
+            17.2788,
+            20.4204,
+            23.5619,
+            26.7035,
+            29.8451,
+        ]
 
         # Shear correction parameters
         # s² = EI / (κGAL²) - represents shear deformation importance
@@ -282,9 +294,7 @@ class TimoshenkoBeam(BaseBeamModel):
             # Correction factor: ω_T / ω_EB ≈ 1 / sqrt(1 + β²*L²*(s² + r²))
             # For detailed implementation, see referenced paper
 
-            correction_factor = 1.0 / np.sqrt(
-                1 + beta_L**2 * (s_squared + r_squared)
-            )
+            correction_factor = 1.0 / np.sqrt(1 + beta_L**2 * (s_squared + r_squared))
 
             # Euler-Bernoulli frequency
             beta_n = beta_L / L

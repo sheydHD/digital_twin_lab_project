@@ -7,15 +7,16 @@ Generates comprehensive reports summarizing:
 - Practical guidelines for digital twin implementation
 """
 
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
 
 import pandas as pd
 
-from apps.bayesian.calibration import CalibrationResult
-from apps.bayesian.model_selection import ModelComparisonResult
+from apps.backend.core.bayesian.calibration import CalibrationResult
+from apps.backend.core.bayesian.model_selection import ModelComparisonResult
 
 
 class ResultsReporter:
@@ -37,7 +38,7 @@ class ResultsReporter:
     def generate_calibration_report(
         self,
         result: CalibrationResult,
-        filename: Optional[str] = None,
+        filename: str | None = None,
     ) -> str:
         """
         Generate calibration report for a single model.
@@ -64,15 +65,31 @@ class ResultsReporter:
         for param, stats in result.posterior_summary.items():
             if param not in ["y_pred"]:
                 report.append(f"\n{param}:")
-                mean_val = stats.get('mean', 'N/A')
-                std_val = stats.get('sd', 'N/A')
-                hdi_low = stats.get('hdi_3%', 'N/A')
-                hdi_high = stats.get('hdi_97%', 'N/A')
+                mean_val = stats.get("mean", "N/A")
+                std_val = stats.get("sd", "N/A")
+                hdi_low = stats.get("hdi_3%", "N/A")
+                hdi_high = stats.get("hdi_97%", "N/A")
                 # Format numbers or show N/A
-                report.append(f"  Mean:   {mean_val:.6e}" if isinstance(mean_val, (int, float)) else f"  Mean:   {mean_val}")
-                report.append(f"  Std:    {std_val:.6e}" if isinstance(std_val, (int, float)) else f"  Std:    {std_val}")
-                report.append(f"  HDI 3%: {hdi_low:.6e}" if isinstance(hdi_low, (int, float)) else f"  HDI 3%: {hdi_low}")
-                report.append(f"  HDI 97%: {hdi_high:.6e}" if isinstance(hdi_high, (int, float)) else f"  HDI 97%: {hdi_high}")
+                report.append(
+                    f"  Mean:   {mean_val:.6e}"
+                    if isinstance(mean_val, (int, float))
+                    else f"  Mean:   {mean_val}"
+                )
+                report.append(
+                    f"  Std:    {std_val:.6e}"
+                    if isinstance(std_val, (int, float))
+                    else f"  Std:    {std_val}"
+                )
+                report.append(
+                    f"  HDI 3%: {hdi_low:.6e}"
+                    if isinstance(hdi_low, (int, float))
+                    else f"  HDI 3%: {hdi_low}"
+                )
+                report.append(
+                    f"  HDI 97%: {hdi_high:.6e}"
+                    if isinstance(hdi_high, (int, float))
+                    else f"  HDI 97%: {hdi_high}"
+                )
 
         # Model comparison metrics
         report.append("")
@@ -104,7 +121,7 @@ class ResultsReporter:
     def generate_comparison_report(
         self,
         comparison: ModelComparisonResult,
-        filename: Optional[str] = None,
+        filename: str | None = None,
     ) -> str:
         """
         Generate model comparison report.
@@ -158,7 +175,7 @@ class ResultsReporter:
 
     def generate_study_summary(
         self,
-        study_results: Dict,
+        study_results: dict,
         filename: str = "study_summary.txt",
     ) -> str:
         """
@@ -216,7 +233,7 @@ class ResultsReporter:
         report.append("-" * 40)
         report.append(f"{'L/h':<10}{'Log BF':<15}{'Recommendation':<20}")
         report.append("-" * 40)
-        for L_h, bf, rec in zip(aspect_ratios, log_bfs, recommendations, strict=False):
+        for L_h, bf, rec in zip(aspect_ratios, log_bfs, recommendations, strict=True):
             report.append(f"{L_h:<10.1f}{bf:<15.4f}{rec:<20}")
         report.append("")
 
@@ -238,7 +255,7 @@ class ResultsReporter:
 
     def export_results_json(
         self,
-        study_results: Dict,
+        study_results: dict,
         filename: str = "results.json",
     ) -> None:
         """
@@ -265,7 +282,7 @@ class ResultsReporter:
 
     def export_results_csv(
         self,
-        study_results: Dict,
+        study_results: dict,
         filename: str = "results.csv",
     ) -> None:
         """
@@ -275,18 +292,20 @@ class ResultsReporter:
             study_results: Study results dictionary
             filename: Output filename
         """
-        df = pd.DataFrame({
-            "aspect_ratio": study_results["aspect_ratios"],
-            "log_bayes_factor": study_results["log_bayes_factors"],
-            "recommendation": study_results["recommendations"],
-        })
+        df = pd.DataFrame(
+            {
+                "aspect_ratio": study_results["aspect_ratios"],
+                "log_bayes_factor": study_results["log_bayes_factors"],
+                "recommendation": study_results["recommendations"],
+            }
+        )
 
         filepath = self.output_dir / filename
         df.to_csv(filepath, index=False)
 
     def generate_frequency_report(
         self,
-        frequency_results: Dict,
+        frequency_results: dict,
         filename: str = "frequency_analysis.txt",
     ) -> str:
         """
@@ -333,9 +352,9 @@ class ResultsReporter:
             if eb_freqs and timo_freqs:
                 report.append("  Mode |  EB (Hz)   | Timo (Hz)  | Ratio")
                 report.append("  -----|------------|------------|-------")
-                for i, (f_eb, f_t) in enumerate(zip(eb_freqs[:5], timo_freqs[:5], strict=False)):
+                for i, (f_eb, f_t) in enumerate(zip(eb_freqs[:5], timo_freqs[:5], strict=True)):
                     ratio = f_t / f_eb if f_eb > 0 else 1.0
-                    report.append(f"    {i+1}  | {f_eb:10.2f} | {f_t:10.2f} | {ratio:.4f}")
+                    report.append(f"    {i + 1}  | {f_eb:10.2f} | {f_t:10.2f} | {ratio:.4f}")
 
             transition = result.get("transition_mode")
             if transition:

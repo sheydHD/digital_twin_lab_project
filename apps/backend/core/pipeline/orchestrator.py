@@ -10,38 +10,71 @@ Coordinates the full Bayesian model selection workflow:
 6. Analysis and reporting
 """
 
+from __future__ import annotations
+
 import logging
+import os
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 from rich.console import Console
 from rich.table import Table
 
-from apps.analysis.reporter import ResultsReporter
-from apps.analysis.visualization import BeamVisualization
-from apps.bayesian.calibration import (
+from apps.backend.core.analysis.reporter import ResultsReporter
+from apps.backend.core.analysis.visualization import BeamVisualization
+from apps.backend.core.bayesian.calibration import (
     CalibrationResult,
     EulerBernoulliCalibrator,
     TimoshenkoCalibrator,
     create_default_priors,
     create_timoshenko_priors,
 )
-from apps.bayesian.model_selection import (
+from apps.backend.core.bayesian.model_selection import (
     BayesianModelSelector,
     ModelComparisonResult,
 )
-from apps.data.synthetic_generator import (
+from apps.backend.core.data.synthetic_generator import (
     NoiseModel,
     SensorConfiguration,
     SyntheticDataGenerator,
     SyntheticDataset,
     save_dataset,
 )
-from apps.models.base_beam import LoadCase, MaterialProperties
+from apps.backend.core.models.base_beam import LoadCase, MaterialProperties
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+
+# ── Module-level worker (must be picklable for ProcessPoolExecutor) ──────────
+
+def _run_single_calibration(
+    dataset: SyntheticDataset,
+    calibrator_cls,  # EulerBernoulliCalibrator | TimoshenkoCalibrator
+    priors: list,
+    n_samples: int,
+    n_tune: int,
+    n_chains: int,
+    target_accept: float,
+) -> CalibrationResult:
+    """Run one Bayesian calibration inside a subprocess worker.
+
+    Lives at module level so it is picklable by ``ProcessPoolExecutor``.
+    Each worker gets an isolated Python interpreter, which means separate
+    PyMC / PyTensor state — no shared global graph, no GIL contention.
+    """
+    calibrator = calibrator_cls(
+        priors=priors,
+        n_samples=n_samples,
+        n_tune=n_tune,
+        n_chains=n_chains,
+        target_accept=target_accept,
+    )
+    result = calibrator.calibrate(dataset)
+    result.marginal_likelihood_estimate = calibrator.compute_marginal_likelihood()
+    return result
 
 
 class PipelineOrchestrator:
@@ -56,7 +89,7 @@ class PipelineOrchestrator:
 
     """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: dict[str, Any]):
         """
         Initialize the pipeline orchestrator.
 
@@ -71,13 +104,13 @@ class PipelineOrchestrator:
         self._setup_components()
 
         # Storage for results
-        self.datasets: List[SyntheticDataset] = []
-        self.eb_results: List[CalibrationResult] = []
-        self.timo_results: List[CalibrationResult] = []
-        self.comparisons: List[ModelComparisonResult] = []
-        self.study_results: Optional[Dict] = None
-        self.frequency_results: Optional[Dict] = None
-        self.optimization_results: Optional[Dict] = None
+        self.datasets: list[SyntheticDataset] = []
+        self.eb_results: list[CalibrationResult] = []
+        self.timo_results: list[CalibrationResult] = []
+        self.comparisons: list[ModelComparisonResult] = []
+        self.study_results: dict | None = None
+        self.frequency_results: dict | None = None
+        self.optimization_results: dict | None = None
 
     def _setup_components(self) -> None:
         """Set up pipeline components from configuration."""
@@ -121,10 +154,7 @@ class PipelineOrchestrator:
         )
 
         # Aspect ratios to study
-        self.aspect_ratios = beam_cfg.get(
-            "aspect_ratios",
-            [5, 8, 10, 12, 15, 20, 30, 50]
-        )
+        self.aspect_ratios = beam_cfg.get("aspect_ratios", [5, 8, 10, 12, 15, 20, 30, 50])
         self.base_length = beam_cfg.get("length", 1.0)
         self.base_width = beam_cfg.get("width", 0.1)
 
@@ -137,7 +167,7 @@ class PipelineOrchestrator:
         self.visualizer = BeamVisualization(self.output_dir / "figures")
         self.reporter = ResultsReporter(self.output_dir / "reports")
 
-    def run_full_pipeline(self) -> Dict:
+    def run_full_pipeline(self) -> dict:
         """
         Run the complete pipeline.
 
@@ -175,7 +205,7 @@ class PipelineOrchestrator:
             "frequency_results": self.frequency_results,
         }
 
-    def run_data_generation(self) -> List[SyntheticDataset]:
+    def run_data_generation(self) -> list[SyntheticDataset]:
         """
         Generate synthetic measurement data for all aspect ratios.
 
@@ -211,66 +241,90 @@ class PipelineOrchestrator:
 
         return self.datasets
 
-    def run_calibration(self) -> Dict:
+    def run_calibration(self, progress_callback=None) -> dict:
         """
         Run Bayesian calibration for both beam theories.
 
+        Euler-Bernoulli and Timoshenko calibrations are independent for
+        every dataset, so they are submitted to a ``ProcessPoolExecutor``
+        and executed concurrently.  Using separate *processes* (not threads)
+        gives each calibration its own PyMC / PyTensor graph — no shared
+        state, no GIL bottleneck.
+
+        Wall-clock time is roughly halved compared with the serial loop on
+        a dual-core machine.  ``max_workers`` is capped to 2 (one per model
+        per dataset at a time) so PyMC's own internal chain-parallelism
+        (``n_chains``) doesn't cascade into too many nested subprocesses.
+
+        Args:
+            progress_callback: Optional callable ``(step, total, lh)`` called
+                after each dataset pair is calibrated.
+
         Returns:
             Dictionary with calibration results
-
         """
-        logger.info("Running Bayesian calibration...")
+        logger.info("Running Bayesian calibration (parallel EB + Timo)...")
 
         if not self.datasets:
             console.print("[yellow]No datasets found. Running data generation...[/yellow]")
             self.run_data_generation()
 
-        # Create calibrators
-        eb_priors = create_default_priors()
-        timo_priors = create_timoshenko_priors()
+        eb_priors = create_default_priors(self.config)
+        timo_priors = create_timoshenko_priors(self.config)
+        target_accept = self.config.get("bayesian", {}).get("target_accept", 0.95)
+
+        # Cap outer workers to 2 (EB vs Timo per dataset).
+        # Each PyMC run already spawns n_chains sub-processes internally;
+        # running more than 2 outer workers would create n_chains×workers
+        # concurrent processes and thrash the CPU.
+        max_outer = min(2, os.cpu_count() or 1)
 
         self.eb_results = []
         self.timo_results = []
 
-        for i, dataset in enumerate(self.datasets):
-            L_h = dataset.geometry.aspect_ratio
-            console.print(f"\n  Calibrating for L/h = {L_h:.1f} ({i+1}/{len(self.datasets)})")
+        with ProcessPoolExecutor(max_workers=max_outer) as pool:
+            for i, dataset in enumerate(self.datasets):
+                L_h = dataset.geometry.aspect_ratio
+                console.print(
+                    f"\n  Calibrating for L/h = {L_h:.1f} "
+                    f"({i + 1}/{len(self.datasets)})  [parallel EB + Timo]"
+                )
 
-            # Get target_accept from config (default 0.95 for stability)
-            target_accept = self.config.get("bayesian", {}).get("target_accept", 0.95)
+                # Submit EB and Timo at the same time — they run concurrently.
+                eb_future = pool.submit(
+                    _run_single_calibration,
+                    dataset,
+                    EulerBernoulliCalibrator,
+                    eb_priors,
+                    self.n_samples,
+                    self.n_tune,
+                    self.n_chains,
+                    target_accept,
+                )
+                timo_future = pool.submit(
+                    _run_single_calibration,
+                    dataset,
+                    TimoshenkoCalibrator,
+                    timo_priors,
+                    self.n_samples,
+                    self.n_tune,
+                    self.n_chains,
+                    target_accept,
+                )
 
-            # Euler-Bernoulli calibration
-            eb_calibrator = EulerBernoulliCalibrator(
-                priors=eb_priors,
-                n_samples=self.n_samples,
-                n_tune=self.n_tune,
-                n_chains=self.n_chains,
-                target_accept=target_accept,
-            )
-            eb_result = eb_calibrator.calibrate(dataset)
-            eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood()
-            self.eb_results.append(eb_result)
+                self.eb_results.append(eb_future.result())
+                self.timo_results.append(timo_future.result())
 
-            # Timoshenko calibration
-            timo_calibrator = TimoshenkoCalibrator(
-                priors=timo_priors,
-                n_samples=self.n_samples,
-                n_tune=self.n_tune,
-                n_chains=self.n_chains,
-                target_accept=target_accept,
-            )
-            timo_result = timo_calibrator.calibrate(dataset)
-            timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood()
-            self.timo_results.append(timo_result)
+                if progress_callback:
+                    progress_callback(i + 1, len(self.datasets), L_h)
 
         console.print(f"\n  Calibrated {len(self.eb_results)} model pairs")
-
         return {
             "euler_bernoulli": self.eb_results,
             "timoshenko": self.timo_results,
         }
 
-    def run_analysis(self) -> Dict:
+    def run_analysis(self) -> dict:
         """
         Analyze model selection results.
 
@@ -300,7 +354,7 @@ class PipelineOrchestrator:
 
         return self.study_results
 
-    def run_frequency_analysis(self) -> Dict:
+    def run_frequency_analysis(self) -> dict:
         """
         Analyze model selection across frequencies.
 
@@ -311,7 +365,9 @@ class PipelineOrchestrator:
         """
         logger.info("Running frequency analysis...")
 
-        from apps.bayesian.hyperparameter_optimization import FrequencyBasedModelSelector
+        from apps.backend.core.bayesian.hyperparameter_optimization import (
+            FrequencyBasedModelSelector,
+        )
 
         freq_selector = FrequencyBasedModelSelector()
         self.frequency_results = freq_selector.analyze_frequency_study(self.datasets)
@@ -322,9 +378,7 @@ class PipelineOrchestrator:
         if self.frequency_results and "summary" in self.frequency_results:
             summary = self.frequency_results["summary"]
             if summary.get("typical_transition_mode"):
-                console.print(
-                    f"  Typical transition mode: {summary['typical_transition_mode']}"
-                )
+                console.print(f"  Typical transition mode: {summary['typical_transition_mode']}")
 
         return self.frequency_results
 
@@ -332,7 +386,7 @@ class PipelineOrchestrator:
         self,
         n_trials: int = 20,
         fast_mode: bool = True,
-    ) -> Dict:
+    ) -> dict:
         """
         Run hyperparameter optimization to improve model selection.
 
@@ -353,7 +407,9 @@ class PipelineOrchestrator:
             console.print("[yellow]No datasets found. Running data generation...[/yellow]")
             self.run_data_generation()
 
-        from apps.bayesian.hyperparameter_optimization import BayesianHyperparameterOptimizer
+        from apps.backend.core.bayesian.hyperparameter_optimization import (
+            BayesianHyperparameterOptimizer,
+        )
 
         optimizer = BayesianHyperparameterOptimizer(
             datasets=self.datasets,
@@ -378,8 +434,8 @@ class PipelineOrchestrator:
 
     def run_calibration_with_optimized_params(
         self,
-        optimized_params: Optional[Dict] = None,
-    ) -> Dict:
+        optimized_params: dict | None = None,
+    ) -> dict:
         """
         Run calibration using optimized hyperparameters.
 
@@ -395,7 +451,7 @@ class PipelineOrchestrator:
             console.print("[yellow]No datasets found. Running data generation...[/yellow]")
             self.run_data_generation()
 
-        from apps.bayesian.hyperparameter_optimization import create_priors_from_params
+        from apps.backend.core.bayesian.hyperparameter_optimization import create_priors_from_params
 
         if optimized_params is None:
             # Use default optimized values
@@ -420,36 +476,38 @@ class PipelineOrchestrator:
         self.eb_results = []
         self.timo_results = []
 
-        for i, dataset in enumerate(self.datasets):
-            L_h = dataset.geometry.aspect_ratio
-            console.print(f"\n  Calibrating for L/h = {L_h:.1f} ({i+1}/{len(self.datasets)})")
-
-            # Euler-Bernoulli calibration
-            eb_calibrator = EulerBernoulliCalibrator(
-                priors=eb_priors,
-                n_samples=n_samples,
-                n_tune=n_tune,
-                n_chains=self.n_chains,
-                target_accept=target_accept,
-            )
-            eb_result = eb_calibrator.calibrate(dataset)
-            eb_result.marginal_likelihood_estimate = eb_calibrator.compute_marginal_likelihood()
-            self.eb_results.append(eb_result)
-
-            # Timoshenko calibration
-            timo_calibrator = TimoshenkoCalibrator(
-                priors=timo_priors,
-                n_samples=n_samples,
-                n_tune=n_tune,
-                n_chains=self.n_chains,
-                target_accept=target_accept,
-            )
-            timo_result = timo_calibrator.calibrate(dataset)
-            timo_result.marginal_likelihood_estimate = timo_calibrator.compute_marginal_likelihood()
-            self.timo_results.append(timo_result)
+        max_outer = min(2, os.cpu_count() or 1)
+        with ProcessPoolExecutor(max_workers=max_outer) as pool:
+            for i, dataset in enumerate(self.datasets):
+                L_h = dataset.geometry.aspect_ratio
+                console.print(
+                    f"\n  Calibrating for L/h = {L_h:.1f} "
+                    f"({i + 1}/{len(self.datasets)})  [parallel EB + Timo]"
+                )
+                eb_future = pool.submit(
+                    _run_single_calibration,
+                    dataset,
+                    EulerBernoulliCalibrator,
+                    eb_priors,
+                    n_samples,
+                    n_tune,
+                    self.n_chains,
+                    target_accept,
+                )
+                timo_future = pool.submit(
+                    _run_single_calibration,
+                    dataset,
+                    TimoshenkoCalibrator,
+                    timo_priors,
+                    n_samples,
+                    n_tune,
+                    self.n_chains,
+                    target_accept,
+                )
+                self.eb_results.append(eb_future.result())
+                self.timo_results.append(timo_future.result())
 
         console.print(f"\n  Calibrated {len(self.eb_results)} model pairs with optimized params")
-
         return {
             "euler_bernoulli": self.eb_results,
             "timoshenko": self.timo_results,
@@ -460,10 +518,20 @@ class PipelineOrchestrator:
         if not self.study_results:
             return
 
+        # Ensure output directory exists (may have been cleaned after init)
+        self.visualizer.output_dir.mkdir(parents=True, exist_ok=True)
+
         console.print("  Generating visualizations...")
 
         # Aspect ratio study plot
         self.visualizer.plot_aspect_ratio_study(self.study_results)
+
+        # WAIC comparison plot
+        self.visualizer.plot_waic_comparison(
+            study_results=self.study_results,
+            eb_results=self.eb_results,
+            tim_results=self.timo_results,
+        )
 
         # Deflection error plot (shear contribution)
         self.visualizer.plot_deflection_error(
@@ -505,15 +573,17 @@ class PipelineOrchestrator:
             L_h = self.aspect_ratios[0]
 
             self.visualizer.plot_prior_posterior_comparison(
-                self.eb_results[0], eb_priors,
+                self.eb_results[0],
+                eb_priors,
                 filename=f"prior_posterior_eb_Lh_{L_h:.0f}.png",
             )
             self.visualizer.plot_prior_posterior_comparison(
-                self.timo_results[0], timo_priors,
+                self.timo_results[0],
+                timo_priors,
                 filename=f"prior_posterior_timo_Lh_{L_h:.0f}.png",
             )
 
-    def generate_report(self) -> Dict:
+    def generate_report(self) -> dict:
         """
         Generate all reports.
 
@@ -566,7 +636,7 @@ class PipelineOrchestrator:
 
         return reports
 
-    def print_summary(self, results: Dict) -> None:
+    def print_summary(self, results: dict) -> None:
         """
         Print a summary table of results.
 
@@ -586,20 +656,21 @@ class PipelineOrchestrator:
         for L_h, bf, rec in zip(
             self.study_results["aspect_ratios"],
             self.study_results["log_bayes_factors"],
-            self.study_results["recommendations"], strict=False,
+            self.study_results["recommendations"],
+            strict=True,
         ):
             bf_str = f"{bf:.3f}"
             table.add_row(f"{L_h:.1f}", bf_str, rec)
 
         console.print(table)
-        console.print("\n[dim]Note: Log BF > 0 favors Euler-Bernoulli, Log BF < 0 favors Timoshenko[/dim]")
+        console.print(
+            "\n[dim]Note: Log BF > 0 favors Euler-Bernoulli, Log BF < 0 favors Timoshenko[/dim]"
+        )
 
         # Print transition point
         transition = self.study_results.get("transition_aspect_ratio")
         if transition:
-            console.print(
-                f"\n[bold]Transition aspect ratio: L/h ≈ {transition:.1f}[/bold]"
-            )
+            console.print(f"\n[bold]Transition aspect ratio: L/h ≈ {transition:.1f}[/bold]")
 
         # Print key guideline
         guidelines = self.study_results.get("guidelines", {})
