@@ -1,0 +1,48 @@
+site_name: Bayesian Beam Model Selection
+site_description: >-
+  Bayesian Model Selection for Beam Theory in Structural Health
+  Monitoring Digital Twins
+site_url: https://sheydHD.github.io/digital_twin_lab_project
+repo_url: https://github.com/sheydHD/digital_twin_lab_project
+repo_name: sheydHD/digital_twin_lab_project
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: teal
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            docstring_style: google
+
+nav:
+  - Home: getting-started.md
+  - Architecture: architecture.md
+  - Technical Spec: technical-spec.md
+  - API Reference: api-reference.md
+  - Parameters: parameters.md
+  - Bayesian Glossary: bayesian-glossary.md
+  - Development: development-guide.md
+
+docs_dir: docs
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+  - toc:
+      permalink: true
