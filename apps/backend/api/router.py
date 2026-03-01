@@ -72,7 +72,13 @@ async def simulate(request: Request) -> JSONResponse:
     """
     # Reset progress state for this run; the dict is shared with run_simulation
     # via a direct reference so thread updates are immediately visible here.
-    progress = {"stage": "starting", "step": 0, "total": 0, "message": "Starting simulation…", "running": True}
+    progress = {
+        "stage": "starting",
+        "step": 0,
+        "total": 0,
+        "message": "Starting simulation…",
+        "running": True,
+    }
     request.app.state.progress = progress
     request.app.state.last_result = None  # Clear previous result on new run
     try:

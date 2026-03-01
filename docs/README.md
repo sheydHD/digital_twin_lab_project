@@ -13,17 +13,15 @@ Documentation for the Bayesian beam theory model selection framework.
 | [development guide](development-guide.md) | dev environment, testing, debugging |
 | [parameters](parameters.md) | parameter tables, priors, sign conventions |
 | [bayesian glossary](bayesian-glossary.md) | glossary of all statistical methods used |
-| [presentation guide](PRESENTATION_GUIDE.md) | slide-by-slide presentation notes |
 
 ## root-level docs
 
 | document | description |
 |----------|-------------|
-| [README](../README.md) | project overview and quick start |
-| [contributing](../CONTRIBUTING.md) | contribution guidelines |
-| [changelog](../CHANGELOG.md) | version history |
-| [authors](../AUTHORS.md) | developers and acknowledgments |
-| [license](../LICENSE) | MIT license |
+| [README](https://github.com/sheydHD/digital_twin_lab_project#readme) | project overview and quick start |
+| [contributing](https://github.com/sheydHD/digital_twin_lab_project/blob/main/CONTRIBUTING.md) | contribution guidelines |
+| [changelog](https://github.com/sheydHD/digital_twin_lab_project/blob/main/CHANGELOG.md) | version history |
+| [authors](https://github.com/sheydHD/digital_twin_lab_project/blob/main/AUTHORS.md) | developers and acknowledgments |
 
 ## Structure
 
@@ -37,6 +35,4 @@ docs/
   parameters.md           parameter tables, priors, sign conventions, study grid
   bayesian-glossary.md    all 22 statistical concepts with code locations
   development-guide.md    testing, linting, debugging, extension patterns
-  PRESENTATION_GUIDE.md   slide-by-slide presentation notes
-  internal/               internal development notes
 ```

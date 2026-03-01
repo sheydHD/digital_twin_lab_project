@@ -50,6 +50,7 @@ console = Console()
 
 # ── Module-level worker (must be picklable for ProcessPoolExecutor) ──────────
 
+
 def _run_single_calibration(
     dataset: SyntheticDataset,
     calibrator_cls,  # EulerBernoulliCalibrator | TimoshenkoCalibrator

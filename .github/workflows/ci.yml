@@ -24,6 +24,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -60,6 +61,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -70,7 +72,7 @@ jobs:
         run: uv pip install --system -e ".[dev]"
 
       - name: Run tests
-        run: pytest tests/ -v --cov=apps --cov-report=xml --cov-report=term-missing
+        run: pytest tests/ --cov-report=xml
 
       - name: Upload coverage (ubuntu / 3.12 only)
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
@@ -89,6 +91,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -114,6 +117,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          cache-dependency-glob: "**/pyproject.toml"
 
       - name: Set up Python
         uses: actions/setup-python@v5
